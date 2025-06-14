@@ -16,6 +16,9 @@ app.use(express.json());
 // Mount your routes
 app.use('/auth', userRoutes);
 
+app.get('/', (req, res) => {
+  res.send('Welcome to the API'); 
+})
 // Start server on port 5000
 const PORT = 5000;
 app.listen(PORT, () => {
