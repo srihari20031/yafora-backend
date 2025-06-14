@@ -1,13 +1,13 @@
 {
   "name": "yafora-backend",
   "version": "1.0.0",
- "main": "dist/index.js",
+  "main": "index.js",
   "scripts": {
     "clean": "rimraf ./dist",
-    "build": "npm run clean && tsc",
-    "start": "node index.js",
-    "local": "ts-node src/index.ts",
-    "local:watch": "nodemon --watch src --ext ts,json --exec \"ts-node src/index.ts\""
+    "build": "npm run clean && tsc -b",
+    "start": "node dist",
+    "local": "ts-node src",
+    "local:watch": "nodemon --watch src --ext ts,json --exec \"ts-node src\""
   },
   "keywords": [],
   "author": "",
