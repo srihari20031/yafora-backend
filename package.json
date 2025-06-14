@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "clean": "rimraf ./dist",
+    "clean": "rimraf dist && tsc",
     "build": "npm run clean && tsc -b",
-    "start": "node dist",
+    "start": "nodemon src/index.ts",
     "local": "ts-node src",
     "local:watch": "nodemon --watch src --ext ts,json --exec \"ts-node src\""
   },
