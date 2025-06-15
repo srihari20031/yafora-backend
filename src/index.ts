@@ -22,8 +22,7 @@ const corsOptions: CorsOptions = {
     const allowedOrigins: string[] = [
       'http://localhost:3000',
       'http://localhost:3001', 
-      'https://yafora.vercel.app', // Add your production frontend URL here
-      // Add other origins as needed
+      'https://yafora.vercel.app',
     ];
     
     if (allowedOrigins.includes(origin)) {
