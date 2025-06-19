@@ -1,5 +1,8 @@
 import express from 'express';
 import userRoutes from './routes/userRouter';
+import wishListRoutes from './routes/wishlistRouter'
+import profileRoutes from './routes/profileRouter';
+import productRoutes from './routes/productRouter';
 import cors from 'cors';
 
 const app = express();
@@ -43,6 +46,9 @@ app.use(express.json());
 
 // Mount your routes
 app.use('/auth', userRoutes);
+app.use('/api', wishListRoutes);
+app.use('/api', profileRoutes);
+app.use('/api', productRoutes);
 
 app.get('/', (req, res) => {
   res.send('Welcome to the API'); 

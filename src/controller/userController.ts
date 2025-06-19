@@ -14,7 +14,6 @@ export async function signUp(req: Request, res: Response): Promise<void> {
       path: '/',
     });
    
-    
     res.cookie('sb-refresh-token', result.session?.refresh_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -22,7 +21,6 @@ export async function signUp(req: Request, res: Response): Promise<void> {
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       path: '/',
     });
-
 
     res.status(201).json({ 
       message: 'Signup successful', 
@@ -48,7 +46,6 @@ export async function signIn(req: Request, res: Response): Promise<void> {
       path: '/',
     });
  
-    
     res.cookie('sb-refresh-token', result.session?.refresh_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -57,7 +54,6 @@ export async function signIn(req: Request, res: Response): Promise<void> {
       path: '/',
     });
 
-
     res.status(200).json({ 
       message: 'Signin successful', 
       user: result.session?.user,
@@ -65,5 +61,30 @@ export async function signIn(req: Request, res: Response): Promise<void> {
     });
   } catch (err) {
     res.status(401).json({ error: (err as Error).message });
+  }
+}
+
+export async function signOut(req: Request, res: Response): Promise<void> {
+  try {
+    // Clear the authentication cookies
+    res.clearCookie('sb-access-token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+    });
+
+    res.clearCookie('sb-refresh-token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+    });
+
+    res.status(200).json({ 
+      message: 'Signout successful'
+    });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
   }
 }
