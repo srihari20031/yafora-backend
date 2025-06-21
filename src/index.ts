@@ -3,6 +3,7 @@ import userRoutes from './routes/userRouter';
 import wishListRoutes from './routes/wishlistRouter'
 import profileRoutes from './routes/profileRouter';
 import productRoutes from './routes/productRouter';
+import cartRoutes from './routes/cartRouter';
 import cors from 'cors';
 
 const app = express();
@@ -49,6 +50,7 @@ app.use('/auth', userRoutes);
 app.use('/api', wishListRoutes);
 app.use('/api', profileRoutes);
 app.use('/api', productRoutes);
+app.use('/api', cartRoutes);
 
 app.get('/', (req, res) => {
   res.send('Welcome to the API'); 

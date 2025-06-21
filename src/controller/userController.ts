@@ -9,7 +9,7 @@ export async function signUp(req: Request, res: Response): Promise<void> {
     res.cookie('sb-access-token', result.session?.access_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'none',
       maxAge: 60 * 60 * 1000, // 1 hour
       path: '/',
     });
@@ -17,7 +17,7 @@ export async function signUp(req: Request, res: Response): Promise<void> {
     res.cookie('sb-refresh-token', result.session?.refresh_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'none',
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       path: '/',
     });
