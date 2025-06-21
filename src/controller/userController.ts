@@ -13,6 +13,7 @@ const getCookieOptions = (maxAge: number) => {
       sameSite: 'lax' as const, // Use 'lax' instead of 'none' for same-site
       maxAge: maxAge,
       path: '/',
+      domain: '.vercel.app', // Set domain for Vercel
       // DO NOT set domain for Vercel - let it default to the current domain
       // This prevents cross-subdomain issues
     };
