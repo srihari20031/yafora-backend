@@ -17,47 +17,43 @@ interface CorsOptions {
   optionsSuccessStatus: number;
 }
 
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['https://yafora.vercel.app'];
+
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void): void {
-    // Allow requests with no origin (like mobile apps, Postman, or same-origin requests)
-    if (!origin) return callback(null, true);
-    
-    // Define allowed origins - make sure these match exactly
-    const allowedOrigins: string[] = [
-      'http://localhost:3000',
-      'http://localhost:3001', 
-      'https://yafora.vercel.app', // Your exact frontend URL
-      // Add any other domains you might use
-    ];
-    
     console.log('CORS Origin check:', origin); // Debug log
-    
-    if (allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       console.warn('CORS blocked origin:', origin);
       callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
     }
   },
-  credentials: true, // This is crucial for cookies
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
+    'Content-Type',
+    'Authorization',
     'X-Requested-With',
     'Accept',
     'Origin',
     'Access-Control-Request-Method',
     'Access-Control-Request-Headers',
-    'Cookie'
+    'Cookie',
   ],
-  exposedHeaders: ['Set-Cookie'], // Important for cookie handling
-  optionsSuccessStatus: 200, // Some legacy browsers choke on 204
-  preflightContinue: false, // Pass control to next handler
+  exposedHeaders: ['Set-Cookie'],
+  optionsSuccessStatus: 200,
+  preflightContinue: false,
 };
 
+// Log all requests for debugging
+app.use((req, res, next) => {
+  console.log('Request:', req.method, req.url, 'Origin:', req.get('Origin'));
+  next();
+});
 
-// Middleware
 app.use(cors(corsOptions));
 app.use(express.json());
 
