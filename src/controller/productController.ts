@@ -1,14 +1,14 @@
 import { Request, Response } from 'express';
-import { createProduct,   
-    deleteProduct, 
+import { 
+  createProduct,   
+  deleteProduct, 
   getProductById,
   getSellerProducts,
   searchProducts,
   getProductsByCategory, 
-  updateProduct} from '../services/productService';
-
-
-
+  updateProduct,
+  getFeaturedProducts
+} from '../services/productService';
 
 export async function addProduct(req: Request, res: Response): Promise<void> {
   const productData = req.body;
@@ -85,6 +85,7 @@ export async function searchProductsHandler(req: Request, res: Response): Promis
     maxPrice, 
     size, 
     availability,
+    featured,
     page = 1, 
     limit = 10 
   } = req.query;
@@ -95,7 +96,8 @@ export async function searchProductsHandler(req: Request, res: Response): Promis
       minPrice: minPrice ? Number(minPrice) : undefined,
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
       size: size as string,
-      availability: availability as string
+      availability: availability as string,
+      featured: featured === 'true' || featured === '1'
     };
     
     const products = await searchProducts(
@@ -105,7 +107,7 @@ export async function searchProductsHandler(req: Request, res: Response): Promis
       Number(limit)
     );
     
-    res.status(200).json({ products });
+    res.status(200).json(products);
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }
@@ -121,7 +123,22 @@ export async function getProductsByCategories(req: Request, res: Response): Prom
       Number(page), 
       Number(limit)
     );
-    res.status(200).json({ products });
+    res.status(200).json(products);
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+}
+
+// New controller function for featured products
+export async function getFeaturedProductsHandler(req: Request, res: Response): Promise<void> {
+  const { page = 1, limit = 10 } = req.query;
+  
+  try {
+    const products = await getFeaturedProducts(
+      Number(page), 
+      Number(limit)
+    );
+    res.status(200).json(products);
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }
