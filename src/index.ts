@@ -48,7 +48,8 @@ const corsOptions = {
     'Accept',
     'Origin',
     'Access-Control-Request-Method',
-    'Access-Control-Request-Headers'
+    'Access-Control-Request-Headers',
+    'Cookie'
   ],
   exposedHeaders: ['Set-Cookie'], // Important for cookie handling
   optionsSuccessStatus: 200, // Some legacy browsers choke on 204
