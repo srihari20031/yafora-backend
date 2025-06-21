@@ -10,7 +10,7 @@ const getCookieOptions = (maxAge: number) => {
     return {
       httpOnly: true,
       secure: true, // Always true for HTTPS (Vercel uses HTTPS)
-      sameSite: 'lax' as const, // Use 'lax' instead of 'none' for same-site
+      sameSite: 'none' as const, // Use 'lax' instead of 'none' for same-site
       maxAge: maxAge,
       path: '/',
       domain: '.vercel.app', // Set domain for Vercel
@@ -22,7 +22,7 @@ const getCookieOptions = (maxAge: number) => {
     return {
       httpOnly: true,
       secure: false,
-      sameSite: 'lax' as const,
+      sameSite: 'none' as const,
       maxAge: maxAge,
       path: '/',
     };
