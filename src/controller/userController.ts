@@ -1,5 +1,3 @@
-// src/controller/userController.ts - Updated cookie configuration
-
 import { Request, Response } from 'express';
 import { signUpUser, signInUser } from '../services/userService';
 
@@ -8,18 +6,18 @@ const getCookieOptions = (maxAge: number) => {
   const isProduction = process.env.NODE_ENV === 'production';
   
   if (isProduction) {
-    // Production settings - for cross-origin requests
+    // Production settings - for cross-origin requests (different domains)
     return {
       httpOnly: true,
       secure: true, // Requires HTTPS
       sameSite: 'none' as const, // Required for cross-origin
       maxAge: maxAge,
       path: '/',
-      // Add domain if both frontend and backend are on same root domain
-      // domain: process.env.COOKIE_DOMAIN, // e.g., '.yourdomain.com'
+      // DON'T set domain for Vercel deployments - let browser handle it
+      // domain: undefined // This allows cookies to work across subdomains
     };
   } else {
-    // Development settings - for same-origin requests
+    // Development settings - for same-origin requests (localhost)
     return {
       httpOnly: true,
       secure: false, // HTTP is fine for localhost
@@ -35,24 +33,22 @@ export async function signUp(req: Request, res: Response): Promise<void> {
   try {
     const result = await signUpUser(email, password, fullName, role);
     
+    // Ensure we have tokens before setting cookies
     if (!result.session?.access_token || !result.session?.refresh_token) {
       res.status(400).json({ error: 'Failed to create session' });
       return;
     }
     
-    // Set cookies with proper configuration
-    const cookieOptions = getCookieOptions(60 * 60 * 1000); // 1 hour
-    const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000); // 30 days
-    
-    res.cookie('sb-access-token', result.session.access_token, cookieOptions);
-    res.cookie('sb-refresh-token', result.session.refresh_token, refreshCookieOptions);
+    // Set cookies for access and refresh tokens
+    res.cookie('sb-access-token', result.session.access_token, 
+      getCookieOptions(60 * 60 * 1000) // 1 hour
+    );
+   
+    res.cookie('sb-refresh-token', result.session.refresh_token, 
+      getCookieOptions(30 * 24 * 60 * 60 * 1000) // 30 days
+    );
 
-    // IMPORTANT: Add explicit CORS headers for cookies
-    if (process.env.NODE_ENV === 'production') {
-      res.header('Access-Control-Allow-Credentials', 'true');
-      res.header('Access-Control-Allow-Origin', req.headers.origin);
-    }
-
+    // Send response with explicit headers
     res.status(201).json({ 
       message: 'Signup successful', 
       user: result.user,
@@ -70,22 +66,20 @@ export async function signIn(req: Request, res: Response): Promise<void> {
   try {
     const result = await signInUser(email, password);
 
+    // Ensure we have tokens before setting cookies
     if (!result.session?.access_token || !result.session?.refresh_token) {
       res.status(401).json({ error: 'Invalid credentials or session creation failed' });
       return;
     }
 
-    const cookieOptions = getCookieOptions(60 * 60 * 1000); // 1 hour
-    const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000); // 30 days
-    
-    res.cookie('sb-access-token', result.session.access_token, cookieOptions);
-    res.cookie('sb-refresh-token', result.session.refresh_token, refreshCookieOptions);
-
-    // IMPORTANT: Add explicit CORS headers for cookies
-    if (process.env.NODE_ENV === 'production') {
-      res.header('Access-Control-Allow-Credentials', 'true');
-      res.header('Access-Control-Allow-Origin', req.headers.origin);
-    }
+    // Use the same cookie options as signUp
+    res.cookie('sb-access-token', result.session.access_token, 
+      getCookieOptions(60 * 60 * 1000) // 1 hour
+    );
+ 
+    res.cookie('sb-refresh-token', result.session.refresh_token, 
+      getCookieOptions(30 * 24 * 60 * 60 * 1000) // 30 days
+    );
 
     res.status(200).json({ 
       message: 'Signin successful', 
@@ -107,15 +101,12 @@ export async function signOut(req: Request, res: Response): Promise<void> {
       secure: isProduction,
       sameSite: isProduction ? 'none' as const : 'lax' as const,
       path: '/',
+      // Don't set domain for Vercel deployments
     };
 
+    // Clear the authentication cookies
     res.clearCookie('sb-access-token', clearCookieOptions);
     res.clearCookie('sb-refresh-token', clearCookieOptions);
-
-    if (isProduction) {
-      res.header('Access-Control-Allow-Credentials', 'true');
-      res.header('Access-Control-Allow-Origin', req.headers.origin);
-    }
 
     res.status(200).json({ 
       message: 'Signout successful'
