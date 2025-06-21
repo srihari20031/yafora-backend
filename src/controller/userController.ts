@@ -4,7 +4,6 @@ import { signUpUser, signInUser } from '../services/userService';
 // Helper function to get cookie options based on environment
 const getCookieOptions = (maxAge: number) => {
   const isProduction = process.env.NODE_ENV === 'production';
-  const isDevelopment = process.env.NODE_ENV === 'development';
   
   if (isProduction) {
     // Production settings - for cross-origin requests (different domains)
@@ -14,10 +13,8 @@ const getCookieOptions = (maxAge: number) => {
       sameSite: 'none' as const, // Required for cross-origin
       maxAge: maxAge,
       path: '/',
-      // Add domain if needed
-      ...(process.env.COOKIE_DOMAIN && { 
-        domain: process.env.COOKIE_DOMAIN 
-      })
+      // DON'T set domain for Vercel deployments - let browser handle it
+      // domain: undefined // This allows cookies to work across subdomains
     };
   } else {
     // Development settings - for same-origin requests (localhost)
@@ -36,21 +33,29 @@ export async function signUp(req: Request, res: Response): Promise<void> {
   try {
     const result = await signUpUser(email, password, fullName, role);
     
+    // Ensure we have tokens before setting cookies
+    if (!result.session?.access_token || !result.session?.refresh_token) {
+      res.status(400).json({ error: 'Failed to create session' });
+      return;
+    }
+    
     // Set cookies for access and refresh tokens
-    res.cookie('sb-access-token', result.session?.access_token, 
+    res.cookie('sb-access-token', result.session.access_token, 
       getCookieOptions(60 * 60 * 1000) // 1 hour
     );
    
-    res.cookie('sb-refresh-token', result.session?.refresh_token, 
+    res.cookie('sb-refresh-token', result.session.refresh_token, 
       getCookieOptions(30 * 24 * 60 * 60 * 1000) // 30 days
     );
 
+    // Send response with explicit headers
     res.status(201).json({ 
       message: 'Signup successful', 
       user: result.user,
       session: result.session
     });
   } catch (err) {
+    console.error('Signup error:', err);
     res.status(400).json({ error: (err as Error).message });
   }
 }
@@ -61,12 +66,18 @@ export async function signIn(req: Request, res: Response): Promise<void> {
   try {
     const result = await signInUser(email, password);
 
+    // Ensure we have tokens before setting cookies
+    if (!result.session?.access_token || !result.session?.refresh_token) {
+      res.status(401).json({ error: 'Invalid credentials or session creation failed' });
+      return;
+    }
+
     // Use the same cookie options as signUp
-    res.cookie('sb-access-token', result.session?.access_token, 
+    res.cookie('sb-access-token', result.session.access_token, 
       getCookieOptions(60 * 60 * 1000) // 1 hour
     );
  
-    res.cookie('sb-refresh-token', result.session?.refresh_token, 
+    res.cookie('sb-refresh-token', result.session.refresh_token, 
       getCookieOptions(30 * 24 * 60 * 60 * 1000) // 30 days
     );
 
@@ -76,6 +87,7 @@ export async function signIn(req: Request, res: Response): Promise<void> {
       session: result.session
     });
   } catch (err) {
+    console.error('Signin error:', err);
     res.status(401).json({ error: (err as Error).message });
   }
 }
@@ -89,9 +101,7 @@ export async function signOut(req: Request, res: Response): Promise<void> {
       secure: isProduction,
       sameSite: isProduction ? 'none' as const : 'lax' as const,
       path: '/',
-      ...(isProduction && process.env.COOKIE_DOMAIN && { 
-        domain: process.env.COOKIE_DOMAIN 
-      })
+      // Don't set domain for Vercel deployments
     };
 
     // Clear the authentication cookies
@@ -102,6 +112,7 @@ export async function signOut(req: Request, res: Response): Promise<void> {
       message: 'Signout successful'
     });
   } catch (err) {
+    console.error('Signout error:', err);
     res.status(500).json({ error: (err as Error).message });
   }
 }

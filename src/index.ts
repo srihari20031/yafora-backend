@@ -17,29 +17,44 @@ interface CorsOptions {
   optionsSuccessStatus: number;
 }
 
-const corsOptions: CorsOptions = {
+const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void): void {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // Allow requests with no origin (like mobile apps, Postman, or same-origin requests)
     if (!origin) return callback(null, true);
     
-    // Define allowed origins
+    // Define allowed origins - make sure these match exactly
     const allowedOrigins: string[] = [
       'http://localhost:3000',
       'http://localhost:3001', 
-      'https://yafora.vercel.app',
+      'https://yafora.vercel.app', // Your exact frontend URL
+      // Add any other domains you might use
     ];
+    
+    console.log('CORS Origin check:', origin); // Debug log
     
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.warn('CORS blocked origin:', origin);
+      callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
     }
   },
   credentials: true, // This is crucial for cookies
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
+  ],
+  exposedHeaders: ['Set-Cookie'], // Important for cookie handling
+  optionsSuccessStatus: 200, // Some legacy browsers choke on 204
+  preflightContinue: false, // Pass control to next handler
 };
+
 
 // Middleware
 app.use(cors(corsOptions));
