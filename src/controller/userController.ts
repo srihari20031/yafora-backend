@@ -41,7 +41,7 @@ export async function signIn(req: Request, res: Response): Promise<void> {
     res.cookie('sb-access-token', result.session?.access_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'none',
       maxAge: 60 * 60 * 1000,
       path: '/',
     });
@@ -49,7 +49,7 @@ export async function signIn(req: Request, res: Response): Promise<void> {
     res.cookie('sb-refresh-token', result.session?.refresh_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'none',
       maxAge: 30 * 24 * 60 * 60 * 1000,
       path: '/',
     });
@@ -70,14 +70,14 @@ export async function signOut(req: Request, res: Response): Promise<void> {
     res.clearCookie('sb-access-token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'none',
       path: '/',
     });
 
     res.clearCookie('sb-refresh-token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'none',
       path: '/',
     });
 
