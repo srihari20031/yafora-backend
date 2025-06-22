@@ -17,9 +17,7 @@ interface CorsOptions {
   optionsSuccessStatus: number;
 }
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['https://yafora.vercel.app'];
+const allowedOrigins = ['https://yafora.vercel.app', 'http://localhost:3000', 'http://localhost:3001'];
 
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void): void {
