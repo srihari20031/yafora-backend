@@ -1,38 +1,37 @@
 import { Request, Response } from 'express';
 import { signUpUser, signInUser } from '../services/userService';
 
-// Helper function to get cookie options based on environment
+// 🔥 FIXED: Cookie options for Render.com deployment
 const getCookieOptions = (maxAge: number) => {
   const isProduction = process.env.NODE_ENV === 'production';
   
-  console.log('Environment check:', {
+  console.log('🍪 Cookie environment check:', {
     NODE_ENV: process.env.NODE_ENV,
     isProduction,
-    userAgent: 'backend'
   });
   
   if (isProduction) {
-    // Production settings - for cross-origin requests (different domains)
+    // Production settings for Render.com
     const options = {
       httpOnly: true,
-      secure: true, // Requires HTTPS
-      sameSite: 'none' as const, // Required for cross-origin
+      secure: true, // HTTPS required
+      sameSite: 'none' as const, // Cross-origin required
       maxAge: maxAge,
       path: '/',
-      // DON'T set domain for Vercel deployments - let browser handle it
+      // 🔥 CRITICAL: DON'T set domain for Render.com - let browser handle it
     };
-    console.log('Production cookie options:', options);
+    console.log('🍪 Production cookie options:', options);
     return options;
   } else {
-    // Development settings - for same-origin requests (localhost)
+    // Development settings
     const options = {
       httpOnly: true,
-      secure: false, // HTTP is fine for localhost
-      sameSite: 'lax' as const, // Works for same-origin
+      secure: false,
+      sameSite: 'lax' as const,
       maxAge: maxAge,
       path: '/',
     };
-    console.log('Development cookie options:', options);
+    console.log('🍪 Development cookie options:', options);
     return options;
   }
 };
@@ -40,54 +39,48 @@ const getCookieOptions = (maxAge: number) => {
 export async function signUp(req: Request, res: Response): Promise<void> {
   const { email, password, fullName, role } = req.body;
   
-  // Debug logging
-  console.log('SignUp request headers:', {
+  console.log('📝 SignUp request:', {
     origin: req.get('Origin'),
     userAgent: req.get('User-Agent'),
     cookie: req.get('Cookie'),
-    referer: req.get('Referer')
   });
   
   try {
     const result = await signUpUser(email, password, fullName, role);
     
-    // Ensure we have tokens before setting cookies
     if (!result.session?.access_token || !result.session?.refresh_token) {
-      console.error('Session creation failed - no tokens received');
+      console.error('❌ Session creation failed - no tokens');
       res.status(400).json({ error: 'Failed to create session' });
       return;
     }
     
-    console.log('Setting cookies for signup...');
-    const cookieOptions = getCookieOptions(60 * 60 * 1000);
+    console.log('🍪 Setting cookies for signup...');
     
-    // Set cookies for access and refresh tokens
-    res.cookie('sb-access-token', result.session.access_token, cookieOptions);
-    res.cookie('sb-refresh-token', result.session.refresh_token, 
-      getCookieOptions(30 * 24 * 60 * 60 * 1000) // 30 days
-    );
-
-    // Add explicit headers for debugging
-    res.header('Access-Control-Allow-Credentials', 'true');
+    // 🔥 CRITICAL: Set cookies with proper options
+    const accessCookieOptions = getCookieOptions(60 * 60 * 1000); // 1 hour
+    const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000); // 30 days
     
-    console.log('Response headers before sending:', {
-      'set-cookie': res.getHeaders()['set-cookie'],
-      'access-control-allow-credentials': res.getHeaders()['access-control-allow-credentials']
-    });
-
+    // Set the cookies
+    res.cookie('sb-access-token', result.session.access_token, accessCookieOptions);
+    res.cookie('sb-refresh-token', result.session.refresh_token, refreshCookieOptions);
+    
+    console.log('✅ Cookies set, sending response...');
+    
     // Send response
     res.status(201).json({ 
       message: 'Signup successful', 
       user: result.user,
-      session: result.session,
+      // Don't send session tokens in response when using cookies
       debug: {
         cookiesSet: true,
         environment: process.env.NODE_ENV,
-        origin: req.get('Origin')
+        origin: req.get('Origin'),
+        timestamp: new Date().toISOString()
       }
     });
+    
   } catch (err) {
-    console.error('Signup error:', err);
+    console.error('❌ Signup error:', err);
     res.status(400).json({ error: (err as Error).message });
   }
 }
@@ -95,53 +88,48 @@ export async function signUp(req: Request, res: Response): Promise<void> {
 export async function signIn(req: Request, res: Response): Promise<void> {
   const { email, password } = req.body;
 
-  // Debug logging
-  console.log('SignIn request headers:', {
+  console.log('🔐 SignIn request:', {
     origin: req.get('Origin'),
     userAgent: req.get('User-Agent'),
     cookie: req.get('Cookie'),
-    referer: req.get('Referer')
   });
 
   try {
     const result = await signInUser(email, password);
 
-    // Ensure we have tokens before setting cookies
     if (!result.session?.access_token || !result.session?.refresh_token) {
-      console.error('SignIn session creation failed - no tokens received');
-      res.status(401).json({ error: 'Invalid credentials or session creation failed' });
+      console.error('❌ SignIn failed - no tokens');
+      res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
 
-    console.log('Setting cookies for signin...');
-    const cookieOptions = getCookieOptions(60 * 60 * 1000);
-
-    // Use the same cookie options as signUp
-    res.cookie('sb-access-token', result.session.access_token, cookieOptions);
-    res.cookie('sb-refresh-token', result.session.refresh_token, 
-      getCookieOptions(30 * 24 * 60 * 60 * 1000) // 30 days
-    );
-
-    // Add explicit headers for debugging
-    res.header('Access-Control-Allow-Credentials', 'true');
+    console.log('🍪 Setting cookies for signin...');
     
-    console.log('Response headers before sending:', {
-      'set-cookie': res.getHeaders()['set-cookie'],
-      'access-control-allow-credentials': res.getHeaders()['access-control-allow-credentials']
-    });
+    // 🔥 CRITICAL: Set cookies with proper options
+    const accessCookieOptions = getCookieOptions(60 * 60 * 1000); // 1 hour
+    const refreshCookieOptions = getCookieOptions(30 * 24 * 60 * 60 * 1000); // 30 days
+    
+    // Set the cookies BEFORE sending response
+    res.cookie('sb-access-token', result.session.access_token, accessCookieOptions);
+    res.cookie('sb-refresh-token', result.session.refresh_token, refreshCookieOptions);
+    
+    console.log('✅ SignIn cookies set, sending response...');
 
     res.status(200).json({ 
       message: 'Signin successful', 
-      user: result.session?.user,
-      session: result.session,
+      user: result.session.user,
+      // Don't send session in response when using cookies
       debug: {
         cookiesSet: true,
         environment: process.env.NODE_ENV,
-        origin: req.get('Origin')
+        origin: req.get('Origin'),
+        timestamp: new Date().toISOString(),
+        cookieNames: ['sb-access-token', 'sb-refresh-token']
       }
     });
+    
   } catch (err) {
-    console.error('Signin error:', err);
+    console.error('❌ Signin error:', err);
     res.status(401).json({ error: (err as Error).message });
   }
 }
@@ -150,53 +138,69 @@ export async function signOut(req: Request, res: Response): Promise<void> {
   try {
     const isProduction = process.env.NODE_ENV === 'production';
     
-    console.log('SignOut - clearing cookies in production mode:', isProduction);
+    console.log('🚪 SignOut - clearing cookies in production:', isProduction);
     
     const clearCookieOptions = {
       httpOnly: true,
       secure: isProduction,
       sameSite: isProduction ? 'none' as const : 'lax' as const,
       path: '/',
-      // Don't set domain for Vercel deployments
+      // Don't set domain for Render.com
     };
 
-    console.log('Clear cookie options:', clearCookieOptions);
+    console.log('🍪 Clear cookie options:', clearCookieOptions);
 
-    // Clear the authentication cookies
+    // Clear cookies
     res.clearCookie('sb-access-token', clearCookieOptions);
     res.clearCookie('sb-refresh-token', clearCookieOptions);
 
     res.status(200).json({ 
-      message: 'Signout successful'
+      message: 'Signout successful',
+      debug: {
+        cookiesCleared: true,
+        timestamp: new Date().toISOString()
+      }
     });
+    
   } catch (err) {
-    console.error('Signout error:', err);
+    console.error('❌ Signout error:', err);
     res.status(500).json({ error: (err as Error).message });
   }
 }
 
-// Add a test endpoint to debug cookie setting
+// Enhanced test endpoint
 export async function testCookies(req: Request, res: Response): Promise<void> {
-  console.log('Test cookies endpoint called');
-  console.log('Request origin:', req.get('Origin'));
-  console.log('NODE_ENV:', process.env.NODE_ENV);
+  console.log('🧪 Test cookies endpoint called');
+  console.log('Request details:', {
+    origin: req.get('Origin'),
+    userAgent: req.get('User-Agent'),
+    existingCookies: req.get('Cookie')
+  });
   
   const isProduction = process.env.NODE_ENV === 'production';
   
-  // Set a test cookie
-  res.cookie('test-cookie', 'test-value', {
+  const testCookieOptions = {
     httpOnly: true,
     secure: isProduction,
     sameSite: isProduction ? 'none' as const : 'lax' as const,
     maxAge: 60 * 60 * 1000, // 1 hour
     path: '/',
-  });
+  };
+  
+  console.log('🍪 Setting test cookies with options:', testCookieOptions);
+  
+  // Set multiple test cookies
+  res.cookie('test-cookie-1', 'value-1-' + Date.now(), testCookieOptions);
+  res.cookie('test-cookie-2', 'value-2-' + Date.now(), testCookieOptions);
+  res.cookie('sb-access-token', 'fake-token-' + Date.now(), testCookieOptions);
   
   res.json({
-    message: 'Test cookie set',
+    message: 'Test cookies set successfully',
+    cookieOptions: testCookieOptions,
     environment: process.env.NODE_ENV,
     isProduction,
     origin: req.get('Origin'),
-    headers: req.headers
+    timestamp: new Date().toISOString(),
+    cookiesSet: ['test-cookie-1', 'test-cookie-2', 'sb-access-token']
   });
 }

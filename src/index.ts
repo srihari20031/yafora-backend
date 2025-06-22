@@ -17,6 +17,23 @@ interface CorsOptions {
   optionsSuccessStatus: number;
 }
 
+app.set('trust proxy', 1);
+
+app.use((req, res, next) => {
+  console.log('=== INCOMING REQUEST ===');
+  console.log('Method:', req.method);
+  console.log('URL:', req.url);
+  console.log('Origin:', req.get('Origin'));
+  console.log('Headers:', {
+    'user-agent': req.get('User-Agent'),
+    'cookie': req.get('Cookie'),
+    'x-forwarded-for': req.get('X-Forwarded-For'),
+    'x-forwarded-proto': req.get('X-Forwarded-Proto')
+  });
+  console.log('========================');
+  next();
+});
+
 const allowedOrigins = ['https://yafora.vercel.app', 'http://localhost:3000', 'http://localhost:3001'];
 
 const corsOptions = {
@@ -46,6 +63,7 @@ const corsOptions = {
   preflightContinue: false,
 };
 
+
 // Log all requests for debugging
 app.use((req, res, next) => {
   console.log('Request:', req.method, req.url, 'Origin:', req.get('Origin'));
@@ -55,6 +73,7 @@ app.use((req, res, next) => {
 console.log("Cors optins: ", corsOptions);
 app.use(cors(corsOptions));
 app.use(express.json());
+
 
 // Mount your routes
 app.use('/auth', userRoutes);
