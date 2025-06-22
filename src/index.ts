@@ -54,6 +54,7 @@ app.use((req, res, next) => {
   next();
 });
 
+console.log("Cors optins: ", corsOptions);
 app.use(cors(corsOptions));
 app.use(express.json());
 
