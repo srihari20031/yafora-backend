@@ -8,25 +8,21 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
 const app = express();
+
+// 1. Basic Express middleware first
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // Add this for form data
 
+// 2. Cookie parser BEFORE CORS (important for credential handling)
+app.use(cookieParser());
 
-
-// CORS Configuration - Fixed for credentials
-interface CorsOptions {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => void;
-  credentials: boolean;
-  methods: string[];
-  allowedHeaders: string[];
-  optionsSuccessStatus: number;
-}
-
+// 3. CORS Configuration
 const allowedOrigins = ['https://yafora.vercel.app', 'http://localhost:3000', 'http://localhost:3001'];
-
 
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void): void {
-    console.log('CORS Origin check:', origin); // Debug log
+    console.log('CORS Origin check:', origin);
+    // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -51,18 +47,17 @@ const corsOptions = {
   preflightContinue: false,
 };
 
-// Log all requests for debugging
+// 4. Apply CORS middleware
+app.use(cors(corsOptions));
+
+// 5. Request logging AFTER CORS (so CORS headers are already set)
 app.use((req, res, next) => {
   console.log('Request:', req.method, req.url, 'Origin:', req.get('Origin'));
+  console.log('Cookies:', req.cookies); // Log cookies for debugging
   next();
 });
 
-console.log("Cors optins: ", corsOptions);
-app.use(cors(corsOptions));
-app.use(cookieParser());
-
-
-// Mount your routes
+// 6. Routes
 app.use('/auth', userRoutes);
 app.use('/api', wishListRoutes);
 app.use('/api', profileRoutes);
@@ -73,7 +68,13 @@ app.get('/', (req, res) => {
   res.send('Welcome to the API'); 
 });
 
-// Start server on port 5000
+// 7. Error handling middleware (should be last)
+app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Error:', err.message);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
+// Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
