@@ -9,9 +9,11 @@ import cookieParser from 'cookie-parser';
 
 const app = express();
 
+app.set('trust proxy', 1);
 // 1. Basic Express middleware first
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // Add this for form data
+
 
 // 2. Cookie parser BEFORE CORS (important for credential handling)
 app.use(cookieParser());
