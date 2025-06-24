@@ -18,8 +18,6 @@ const getCookieOptions = (maxAge: number) => {
       secure: true, // Requires HTTPS
       sameSite: 'none' as const, // Required for cross-origin
       maxAge: maxAge,
-      path: '/',
-      // DON'T set domain for Vercel deployments - let browser handle it
     };
     console.log('Production cookie options:', options);
     return options;
