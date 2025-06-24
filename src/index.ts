@@ -8,9 +8,10 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
 const app = express();
+app.use(express.json());
 
 
-app.use(cookieParser());
+
 // CORS Configuration - Fixed for credentials
 interface CorsOptions {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => void;
@@ -58,7 +59,8 @@ app.use((req, res, next) => {
 
 console.log("Cors optins: ", corsOptions);
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(cookieParser());
+
 
 // Mount your routes
 app.use('/auth', userRoutes);

@@ -16,7 +16,6 @@ const getCookieOptions = (maxAge: number) => {
     const options = {
       httpOnly: true,
       secure: true, // Requires HTTPS
-      sameSite: 'none' as const, // Required for cross-origin
       maxAge: maxAge,
       path: '/',
       // DON'T set domain for Vercel deployments - let browser handle it
@@ -28,7 +27,6 @@ const getCookieOptions = (maxAge: number) => {
     const options = {
       httpOnly: true,
       secure: false, // HTTP is fine for localhost
-      sameSite: 'lax' as const, // Works for same-origin
       maxAge: maxAge,
       path: '/',
     };
