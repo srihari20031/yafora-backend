@@ -12,10 +12,11 @@ const getCookieOptions = (maxAge: number) => {
   });
   
   if (isProduction) {
-    // Production settings - for cross-origin requests (different domains)
+    // Production settings - CRITICAL for cross-origin requests
     const options = {
       httpOnly: true,
       secure: true, // Requires HTTPS
+      sameSite: 'none' as const, // CRITICAL: Allows cross-origin cookies
       maxAge: maxAge,
       path: '/',
       // DON'T set domain for Vercel deployments - let browser handle it
@@ -27,6 +28,7 @@ const getCookieOptions = (maxAge: number) => {
     const options = {
       httpOnly: true,
       secure: false, // HTTP is fine for localhost
+      sameSite: 'lax' as const, // More permissive for localhost
       maxAge: maxAge,
       path: '/',
     };
@@ -65,12 +67,14 @@ export async function signUp(req: Request, res: Response): Promise<void> {
       getCookieOptions(30 * 24 * 60 * 60 * 1000) // 30 days
     );
 
-    // Add explicit headers for debugging
+    // CRITICAL: Ensure CORS headers are set correctly
     res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Origin', req.get('Origin')); // Echo back the origin
     
     console.log('Response headers before sending:', {
       'set-cookie': res.getHeaders()['set-cookie'],
-      'access-control-allow-credentials': res.getHeaders()['access-control-allow-credentials']
+      'access-control-allow-credentials': res.getHeaders()['access-control-allow-credentials'],
+      'access-control-allow-origin': res.getHeaders()['access-control-allow-origin']
     });
 
     // Send response
@@ -81,7 +85,8 @@ export async function signUp(req: Request, res: Response): Promise<void> {
       debug: {
         cookiesSet: true,
         environment: process.env.NODE_ENV,
-        origin: req.get('Origin')
+        origin: req.get('Origin'),
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
       }
     });
   } catch (err) {
@@ -120,12 +125,14 @@ export async function signIn(req: Request, res: Response): Promise<void> {
       getCookieOptions(30 * 24 * 60 * 60 * 1000) // 30 days
     );
 
-    // Add explicit headers for debugging
+    // CRITICAL: Ensure CORS headers are set correctly
     res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Origin', req.get('Origin')); // Echo back the origin
     
     console.log('Response headers before sending:', {
       'set-cookie': res.getHeaders()['set-cookie'],
-      'access-control-allow-credentials': res.getHeaders()['access-control-allow-credentials']
+      'access-control-allow-credentials': res.getHeaders()['access-control-allow-credentials'],
+      'access-control-allow-origin': res.getHeaders()['access-control-allow-origin']
     });
 
     res.status(200).json({ 
@@ -135,7 +142,8 @@ export async function signIn(req: Request, res: Response): Promise<void> {
       debug: {
         cookiesSet: true,
         environment: process.env.NODE_ENV,
-        origin: req.get('Origin')
+        origin: req.get('Origin'),
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
       }
     });
   } catch (err) {
@@ -153,7 +161,7 @@ export async function signOut(req: Request, res: Response): Promise<void> {
     const clearCookieOptions = {
       httpOnly: true,
       secure: isProduction,
-      sameSite: isProduction ? 'none' as const : 'lax' as const,
+      sameSite: isProduction ? 'none' as const : 'lax' as const, // CRITICAL: Must match original cookie
       path: '/',
       // Don't set domain for Vercel deployments
     };
@@ -163,6 +171,10 @@ export async function signOut(req: Request, res: Response): Promise<void> {
     // Clear the authentication cookies
     res.clearCookie('sb-access-token', clearCookieOptions);
     res.clearCookie('sb-refresh-token', clearCookieOptions);
+
+    // CRITICAL: Ensure CORS headers are set correctly
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Origin', req.get('Origin'));
 
     res.status(200).json({ 
       message: 'Signout successful'
@@ -181,20 +193,28 @@ export async function testCookies(req: Request, res: Response): Promise<void> {
   
   const isProduction = process.env.NODE_ENV === 'production';
   
-  // Set a test cookie
+  // Set a test cookie with proper cross-origin settings
   res.cookie('test-cookie', 'test-value', {
     httpOnly: true,
     secure: isProduction,
-    sameSite: isProduction ? 'none' as const : 'lax' as const,
+    sameSite: isProduction ? 'none' as const : 'lax' as const, // CRITICAL
     maxAge: 60 * 60 * 1000, // 1 hour
     path: '/',
   });
+  
+  // Ensure CORS headers
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Origin', req.get('Origin'));
   
   res.json({
     message: 'Test cookie set',
     environment: process.env.NODE_ENV,
     isProduction,
     origin: req.get('Origin'),
-    headers: req.headers
+    cookieSettings: {
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      httpOnly: true
+    }
   });
 }
