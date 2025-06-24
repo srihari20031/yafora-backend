@@ -14,10 +14,12 @@ const getCookieOptions = (maxAge: number) => {
   if (isProduction) {
     // Production settings - for cross-origin requests (different domains)
     const options = {
-      // httpOnly: true,
+      httpOnly: true,
       secure: true, // Requires HTTPS
       sameSite: 'none' as const, // Required for cross-origin
       maxAge: maxAge,
+      path: '/',
+      // DON'T set domain for Vercel deployments - let browser handle it
     };
     console.log('Production cookie options:', options);
     return options;
