@@ -5,9 +5,12 @@ import profileRoutes from './routes/profileRouter';
 import productRoutes from './routes/productRouter';
 import cartRoutes from './routes/cartRouter';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 
 const app = express();
 
+
+app.use(cookieParser());
 // CORS Configuration - Fixed for credentials
 interface CorsOptions {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => void;
@@ -18,6 +21,7 @@ interface CorsOptions {
 }
 
 const allowedOrigins = ['https://yafora.vercel.app', 'http://localhost:3000', 'http://localhost:3001'];
+
 
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void): void {

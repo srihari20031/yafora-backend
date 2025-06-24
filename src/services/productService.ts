@@ -25,11 +25,15 @@ export interface ProductFilters {
 }
 
 export async function createProduct(productData: ProductData) {
+
+  console.log('Creating product with data:', productData);
   const { data, error } = await supabaseDB
     .from('products')
     .insert([productData])
     .select()
     .single();
+
+    console.log('Product creation response:', data, error);
   
   if (error) {
     throw new Error(`Failed to create product: ${error.message}`);

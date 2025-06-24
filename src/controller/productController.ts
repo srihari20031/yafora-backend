@@ -71,6 +71,7 @@ export async function getMyProducts(req: Request, res: Response): Promise<void> 
       Number(page), 
       Number(limit)
     );
+    
     res.status(200).json({ products });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
