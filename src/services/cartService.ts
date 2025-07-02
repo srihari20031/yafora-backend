@@ -9,24 +9,28 @@ interface CartItemUpdate {
 export async function addToCart(
   buyerId: string, 
   productId: string, 
-  rentalStartDate: string, 
-  rentalEndDate: string,
+  rentalStartDate?: string | null, // Made optional
+  rentalEndDate?: string | null,   // Made optional
   tryOnRequested: boolean = false
 ) {
-  // Validate dates
-  const startDate = new Date(rentalStartDate);
-  const endDate = new Date(rentalEndDate);
+  let rentalDurationDays: number | null = null;
   
-  if (startDate >= endDate) {
-    throw new Error('Rental end date must be after start date');
+  // Validate dates only if both are provided
+  if (rentalStartDate && rentalEndDate) {
+    const startDate = new Date(rentalStartDate);
+    const endDate = new Date(rentalEndDate);
+    
+    if (startDate >= endDate) {
+      throw new Error('Rental end date must be after start date');
+    }
+    
+    if (startDate < new Date()) {
+      throw new Error('Rental start date cannot be in the past');
+    }
+    
+    // Calculate rental duration
+    rentalDurationDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
   }
-  
-  if (startDate < new Date()) {
-    throw new Error('Rental start date cannot be in the past');
-  }
-  
-  // Calculate rental duration
-  const rentalDurationDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
   
   // Check if product exists and is available
   const { data: product, error: productError } = await supabaseDB
@@ -55,18 +59,26 @@ export async function addToCart(
     throw new Error('Product already in cart');
   }
   
+  // Prepare cart item data
+  const cartItemData: any = {
+    buyer_id: buyerId,
+    product_id: productId,
+    try_on_requested: tryOnRequested,
+    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+    dates_selected: !!(rentalStartDate && rentalEndDate), // Track if dates are selected
+  };
+
+  // Add dates only if provided
+  if (rentalStartDate && rentalEndDate && rentalDurationDays) {
+    cartItemData.rental_start_date = rentalStartDate;
+    cartItemData.rental_end_date = rentalEndDate;
+    cartItemData.rental_duration_days = rentalDurationDays;
+  }
+  
   // Add to cart
   const { data, error } = await supabaseDB
     .from('cart')
-    .insert([{
-      buyer_id: buyerId,
-      product_id: productId,
-      rental_start_date: rentalStartDate,
-      rental_end_date: rentalEndDate,
-      rental_duration_days: rentalDurationDays,
-      try_on_requested: tryOnRequested,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days from now
-    }])
+    .insert([cartItemData])
     .select(`
       *,
       products (
@@ -129,43 +141,67 @@ export async function getUserCart(buyerId: string) {
   // Calculate totals for each item and overall cart
   const cartItems = data?.map(item => {
     const product = item.products;
-    const totalRentalPrice = product.rental_price_per_day * item.rental_duration_days;
-    const securityDeposit = (totalRentalPrice * product.security_deposit_percentage) / 100;
-    const tryOnFee = item.try_on_requested ? 50 : 0; // Assuming ₹50 try-on fee
-    const totalItemPrice = totalRentalPrice + securityDeposit + tryOnFee;
     
-    return {
-      ...item,
-      calculated_totals: {
-        total_rental_price: totalRentalPrice,
-        security_deposit: securityDeposit,
-        try_on_fee: tryOnFee,
-        total_item_price: totalItemPrice
-      }
-    };
+    // Only calculate prices if dates are selected
+    if (item.rental_duration_days && item.dates_selected) {
+      const totalRentalPrice = product.rental_price_per_day * item.rental_duration_days;
+      const securityDeposit = (totalRentalPrice * product.security_deposit_percentage) / 100;
+      const tryOnFee = item.try_on_requested ? 50 : 0; // Assuming ₹50 try-on fee
+      const totalItemPrice = totalRentalPrice + securityDeposit + tryOnFee;
+      
+      return {
+        ...item,
+        calculated_totals: {
+          total_rental_price: totalRentalPrice,
+          security_deposit: securityDeposit,
+          try_on_fee: tryOnFee,
+          total_item_price: totalItemPrice
+        }
+      };
+    } else {
+      // No dates selected - can't calculate pricing yet
+      return {
+        ...item,
+        calculated_totals: {
+          total_rental_price: 0,
+          security_deposit: 0,
+          try_on_fee: item.try_on_requested ? 50 : 0,
+          total_item_price: 0,
+          pricing_available: false // Flag to indicate pricing not available
+        }
+      };
+    }
   }) || [];
   
-  // Calculate cart summary
-  const cartSummary = cartItems.reduce((summary, item) => {
+  // Calculate cart summary (only for items with dates)
+  const itemsWithDates = cartItems.filter(item => item.dates_selected);
+  const itemsWithoutDates = cartItems.filter(item => !item.dates_selected);
+  
+  const cartSummary = itemsWithDates.reduce((summary, item) => {
     const totals = item.calculated_totals;
     return {
       total_rental_price: summary.total_rental_price + totals.total_rental_price,
       total_security_deposit: summary.total_security_deposit + totals.security_deposit,
       total_try_on_fee: summary.total_try_on_fee + totals.try_on_fee,
       grand_total: summary.grand_total + totals.total_item_price,
-      item_count: summary.item_count + 1
+      items_with_dates: summary.items_with_dates + 1
     };
   }, {
     total_rental_price: 0,
     total_security_deposit: 0,
     total_try_on_fee: 0,
     grand_total: 0,
-    item_count: 0
+    items_with_dates: 0
   });
   
   return {
     items: cartItems,
-    summary: cartSummary
+    summary: {
+      ...cartSummary,
+      total_items: cartItems.length,
+      items_without_dates: itemsWithoutDates.length,
+      ready_for_checkout: itemsWithoutDates.length === 0 // Can checkout only if all items have dates
+    }
   };
 }
 
@@ -194,6 +230,7 @@ export async function updateCartItem(
     updateData.rental_start_date = updates.rentalStartDate;
     updateData.rental_end_date = updates.rentalEndDate;
     updateData.rental_duration_days = rentalDurationDays;
+    updateData.dates_selected = true;
   }
   
   if (updates.tryOnRequested !== undefined) {
@@ -251,4 +288,36 @@ export async function checkIfInCart(buyerId: string, productId: string): Promise
   }
   
   return !!data;
+}
+
+// New function to check product availability for specific dates
+export async function checkProductAvailability(
+  productId: string, 
+  rentalStartDate: string, 
+  rentalEndDate: string
+): Promise<boolean> {
+  // Check if product is generally available
+  const { data: product, error: productError } = await supabaseDB
+    .from('products')
+    .select('availability_status')
+    .eq('id', productId)
+    .single();
+    
+  if (productError || !product || product.availability_status !== 'available') {
+    return false;
+  }
+  
+  // Check for overlapping bookings/orders
+  const { data: overlappingBookings, error: bookingError } = await supabaseDB
+    .from('orders')
+    .select('id')
+    .eq('product_id', productId)
+    .in('status', ['confirmed', 'ongoing'])
+    .or(`and(rental_start_date.lte.${rentalEndDate},rental_end_date.gte.${rentalStartDate})`);
+    
+  if (bookingError) {
+    throw new Error(`Failed to check availability: ${bookingError.message}`);
+  }
+  
+  return !overlappingBookings || overlappingBookings.length === 0;
 }

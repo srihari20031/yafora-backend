@@ -5,7 +5,8 @@ import {
   getCart,
   updateCartItemDetails,
   clearCart,
-  checkCartStatus
+  checkCartStatus,
+  checkAvailability
 } from "../controller/cartController";
 
 const router = Router();
@@ -27,5 +28,7 @@ router.delete('/cart/:buyerId', clearCart);
 
 // Check if product is in cart
 router.get('/cart/:buyerId/:productId/status', checkCartStatus);
+
+router.get('/products/:productId/availability', checkAvailability);
 
 export default router;

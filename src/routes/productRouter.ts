@@ -7,7 +7,8 @@ import {
   getProductsByCategories, 
   removeProduct, 
   searchProductsHandler,
-  getFeaturedProductsHandler
+  getFeaturedProductsHandler,
+  uploadMiddleware
 } from "../controller/productController";
 
 const router = Router();
@@ -16,7 +17,7 @@ const router = Router();
 // More specific routes MUST come before generic ones
 
 // Basic CRUD operations
-router.post('/products', addProduct);
+router.post('/products',uploadMiddleware, addProduct);
 
 // Specific routes FIRST (before :productId)
 router.get('/products/search', searchProductsHandler);
@@ -25,7 +26,7 @@ router.get('/products/category/:category', getProductsByCategories);
 
 // Generic routes LAST (after specific ones)
 router.get('/products/:productId', getProduct);
-router.put('/products/:productId', editProduct);
+router.put('/products/:productId',uploadMiddleware, editProduct);
 router.delete('/products/:productId', removeProduct);
 
 // Seller-specific products

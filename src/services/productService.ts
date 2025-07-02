@@ -12,7 +12,7 @@ export interface ProductData {
   availability_status?: 'available' | 'unavailable' | 'booked';
   try_on_available?: boolean;
   try_on_location?: any;
-  is_featured?: boolean; // Add featured flag
+  is_featured?: boolean;
 }
 
 export interface ProductFilters {
@@ -21,11 +21,59 @@ export interface ProductFilters {
   maxPrice?: number;
   size?: string;
   availability?: string;
-  featured?: boolean; // Add featured filter
+  featured?: boolean;
+}
+
+// Helper function to upload image to Supabase Storage
+export async function uploadProductImage(file: File, productId: string, imageIndex: number): Promise<string> {
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${productId}_${imageIndex}_${Date.now()}.${fileExt}`;
+  const filePath = `products/${fileName}`;
+
+  const { data, error } = await supabaseDB.storage
+    .from('product-images')
+    .upload(filePath, file);
+
+  if (error) {
+    throw new Error(`Failed to upload image: ${error.message}`);
+  }
+
+  // Get public URL
+  const { data: publicUrlData } = supabaseDB.storage
+    .from('product-images')
+    .getPublicUrl(filePath);
+
+  return publicUrlData.publicUrl;
+}
+
+// Helper function to delete image from Supabase Storage
+export async function deleteProductImage(imageUrl: string): Promise<void> {
+  // Extract file path from URL
+  const urlParts = imageUrl.split('/');
+  const bucketIndex = urlParts.findIndex(part => part === 'product-images');
+  if (bucketIndex === -1) return;
+  
+  const filePath = urlParts.slice(bucketIndex + 1).join('/');
+
+  const { error } = await supabaseDB.storage
+    .from('product-images')
+    .remove([filePath]);
+
+  if (error) {
+    console.error('Failed to delete image from storage:', error);
+  }
+}
+
+// Helper function to handle multiple image uploads
+export async function uploadMultipleImages(files: File[], productId: string): Promise<string[]> {
+  const uploadPromises = files.map((file, index) => 
+    uploadProductImage(file, productId, index)
+  );
+  
+  return Promise.all(uploadPromises);
 }
 
 export async function createProduct(productData: ProductData) {
-
   console.log('Creating product with data:', productData);
   const { data, error } = await supabaseDB
     .from('products')
@@ -33,7 +81,7 @@ export async function createProduct(productData: ProductData) {
     .select()
     .single();
 
-    console.log('Product creation response:', data, error);
+  console.log('Product creation response:', data, error);
   
   if (error) {
     throw new Error(`Failed to create product: ${error.message}`);
@@ -61,6 +109,21 @@ export async function updateProduct(productId: string, productData: Partial<Prod
 }
 
 export async function deleteProduct(productId: string) {
+  // First, get the product to retrieve image URLs
+  const { data: product } = await supabaseDB
+    .from('products')
+    .select('images')
+    .eq('id', productId)
+    .single();
+
+  // Delete images from storage
+  if (product?.images) {
+    for (const imageUrl of product.images) {
+      await deleteProductImage(imageUrl);
+    }
+  }
+
+  // Delete product from database
   const { error } = await supabaseDB
     .from('products')
     .delete()
@@ -101,7 +164,7 @@ export async function getSellerProducts(sellerId: string, page: number = 1, limi
     .eq('seller_id', sellerId)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
-  
+
   if (error) {
     throw new Error(`Failed to fetch seller products: ${error.message}`);
   }
@@ -218,7 +281,6 @@ export async function getProductsByCategory(
   };
 }
 
-// New function specifically for featured products
 export async function getFeaturedProducts(page: number = 1, limit: number = 10) {
   const offset = (page - 1) * limit;
   
