@@ -61,7 +61,7 @@ app.use((req, res, next) => {
 
 // 6. Routes
 app.use('/auth', userRoutes);
-app.use('/api', wishListRoutes);
+app.use('/api/wishlist', wishListRoutes);
 app.use('/api', profileRoutes);
 app.use('/api', productRoutes);
 app.use('/api', cartRoutes);

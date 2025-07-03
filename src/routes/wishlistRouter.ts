@@ -3,9 +3,9 @@ import { addProductToWishlist, checkWishlistStatus, getWishlist, removeProductFr
 
 const router = Router();
 
-router.post('/wishlist', addProductToWishlist);
-router.delete('/wishlist/:buyerId/:productId', removeProductFromWishlist);
-router.get('/wishlist/:buyerId', getWishlist);
-router.get('/wishlist/:buyerId/:productId/status', checkWishlistStatus);
+router.post('/', addProductToWishlist);
+router.delete('/:buyerId/:productId', removeProductFromWishlist);
+router.get('/:buyerId', getWishlist);
+router.get('/:buyerId/:productId/status', checkWishlistStatus);
 
 export default router;

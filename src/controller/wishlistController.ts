@@ -1,13 +1,9 @@
 import { Request, Response } from 'express';
-import { addToWishlist,
-    removeFromWishlist, 
-  getUserWishlist,
-  checkIfInWishlist
- } from '../services/wishlistService';
-
+import { addToWishlist, removeFromWishlist, getUserWishlist, checkIfInWishlist } from '../services/wishlistService';
 
 export async function addProductToWishlist(req: Request, res: Response): Promise<void> {
   const { buyerId, productId } = req.body;
+  console.log('Adding product to wishlist:', { buyerId, productId });
   
   try {
     const wishlistItem = await addToWishlist(buyerId, productId);

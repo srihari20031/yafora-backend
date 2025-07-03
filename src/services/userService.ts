@@ -5,41 +5,116 @@ export async function signUpUser(email: string, password: string, fullName: stri
   
   // Validate role
   if (!['buyer', 'seller', 'admin'].includes(lowercaseRole)) {
-    throw new Error('Invalid role');
+    throw new Error('Invalid role. Must be buyer, seller, or admin.');
   }
 
-  const { data, error } = await supabaseDB.auth.signUp({
-    email,
-    password,
-  });
-
-  console.log('SignUp Data:', data);
-  console.log('SignUp Error:', error);
-
-  if (error) throw new Error(error.message);
-
-  // The trigger will create the basic profile, now update it with additional info
-  if (data.user) {
-    const { error: profileError } = await supabaseDB
-      .from("profiles")
-      .update({
-        full_name: fullName,
-        role: lowercaseRole,
-      })
-      .eq("id", data.user.id);
-
-    if (profileError) throw new Error(profileError.message);
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    throw new Error('Invalid email format');
   }
 
-  return data;
+  // Validate password strength (optional - adjust as needed)
+  if (password.length < 6) {
+    throw new Error('Password must be at least 6 characters long');
+  }
+
+  try {
+    const { data, error } = await supabaseDB.auth.signUp({
+      email: email.toLowerCase().trim(), // Normalize email
+      password,
+      options: {
+        data: {
+          full_name: fullName.trim(),
+          role: lowercaseRole,
+        }
+      }
+    });
+
+    console.log('SignUp Data:', {
+      user: data.user ? { id: data.user.id, email: data.user.email, confirmed: !!data.user.email_confirmed_at } : null,
+      session: data.session ? 'Present' : 'Null',
+      error: error ? error.message : 'None'
+    });
+
+    if (error) {
+      // Handle specific Supabase errors
+      if (error.message.includes('already registered')) {
+        throw new Error('An account with this email already exists');
+      }
+      throw new Error(error.message);
+    }
+
+    // If we have both user and session (auto-confirm enabled), update profile
+    if (data.user && data.session) {
+      console.log('✅ User created with session - updating profile');
+      
+      try {
+        const { error: profileError } = await supabaseDB
+          .from("profiles")
+          .update({
+            full_name: fullName.trim(),
+            role: lowercaseRole,
+          })
+          .eq("id", data.user.id);
+
+        if (profileError) {
+          console.warn('⚠️ Profile update error (non-critical):', profileError);
+          // Don't throw here as the user was created successfully
+        }
+      } catch (profileError) {
+        console.warn('⚠️ Profile update exception (non-critical):', profileError);
+      }
+    }
+
+    return data;
+  } catch (error) {
+    console.error('💥 SignUp service error:', error);
+    throw error;
+  }
 }
 
 export async function signInUser(email: string, password: string) {
-  const { data, error } = await supabaseDB.auth.signInWithPassword({
-    email,
-    password,
-  });
+  // Validate inputs
+  if (!email || !password) {
+    throw new Error('Email and password are required');
+  }
 
-  if (error) throw new Error(error.message);
-  return data;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    throw new Error('Invalid email format');
+  }
+
+  try {
+    const { data, error } = await supabaseDB.auth.signInWithPassword({
+      email: email.toLowerCase().trim(), // Normalize email
+      password,
+    });
+
+    console.log('SignIn Data:', {
+      user: data.user ? { id: data.user.id, email: data.user.email, confirmed: !!data.user.email_confirmed_at } : null,
+      session: data.session ? 'Present' : 'Null',
+      error: error ? error.message : 'None'
+    });
+
+    if (error) {
+      // Handle specific sign-in errors
+      if (error.message.includes('Invalid login credentials')) {
+        throw new Error('Invalid email or password');
+      }
+      if (error.message.includes('Email not confirmed')) {
+        throw new Error('Please confirm your email before signing in');
+      }
+      throw new Error(error.message);
+    }
+
+    if (!data.session) {
+      throw new Error('Failed to create session. Please try again.');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('💥 SignIn service error:', error);
+    throw error;
+  }
 }
