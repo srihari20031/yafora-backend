@@ -145,7 +145,7 @@ export async function getUserCart(buyerId: string) {
     // Only calculate prices if dates are selected
     if (item.rental_duration_days && item.dates_selected) {
       const totalRentalPrice = product.rental_price_per_day * item.rental_duration_days;
-      const securityDeposit = (totalRentalPrice * product.security_deposit_percentage) / 100;
+      const securityDeposit = (product.rental_price_per_day * product.security_deposit_percentage) / 100;
       const tryOnFee = item.try_on_requested ? 50 : 0; // Assuming ₹50 try-on fee
       const totalItemPrice = totalRentalPrice + securityDeposit + tryOnFee;
       

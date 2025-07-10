@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
+
 import { 
   createProduct,   
   deleteProduct, 
@@ -13,30 +13,18 @@ import {
   uploadMultipleImages,
   deleteProductImage
 } from '../services/productService';
+import { createMulterInstance } from '../../utils/multerUtils';
 
-// Configure multer for file uploads
-const storage = multer.memoryStorage();
-const upload = multer({ 
-  storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    console.log('[ProductController] File filter called:', { 
-      filename: file.originalname, 
-      mimetype: file.mimetype 
-    });
-    // Accept only image files
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      console.error('[ProductController] File filter rejected non-image file:', file.originalname);
-      cb(new Error('Only image files are allowed!'));
-    }
-  }
+// Create multer instance for product images
+const productImageUpload = createMulterInstance({
+  maxFileSize: 5 * 1024 * 1024, // 5MB
+  allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+  maxFiles: 10,
+  fieldName: 'images'
 });
 
-export const uploadMiddleware = upload.array('images', 10); // Max 10 images
+// Export the middleware for use in routes
+export const uploadMiddleware = productImageUpload.array('images', 10);
 
 export async function addProduct(req: Request, res: Response): Promise<void> {
   console.log('[ProductController] addProduct called:', { 

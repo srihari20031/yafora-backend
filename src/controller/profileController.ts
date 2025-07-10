@@ -7,6 +7,7 @@ import {   getProfileById,
 
 export async function getProfile(req: Request, res: Response): Promise<void> {
   const { userId } = req.params;
+  console.log(`Fetching profile for userId: ${userId}`);
   
   try {
     const profile = await getProfileById(userId);

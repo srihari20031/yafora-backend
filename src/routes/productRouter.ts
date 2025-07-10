@@ -13,11 +13,8 @@ import {
 
 const router = Router();
 
-// IMPORTANT: Order matters in Express routes!
-// More specific routes MUST come before generic ones
-
 // Basic CRUD operations
-router.post('/products',uploadMiddleware, addProduct);
+router.post('/products', uploadMiddleware, addProduct);
 
 // Specific routes FIRST (before :productId)
 router.get('/products/search', searchProductsHandler);
@@ -26,7 +23,7 @@ router.get('/products/category/:category', getProductsByCategories);
 
 // Generic routes LAST (after specific ones)
 router.get('/products/:productId', getProduct);
-router.put('/products/:productId',uploadMiddleware, editProduct);
+router.put('/products/:productId', uploadMiddleware, editProduct);
 router.delete('/products/:productId', removeProduct);
 
 // Seller-specific products

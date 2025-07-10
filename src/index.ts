@@ -4,6 +4,7 @@ import wishListRoutes from './routes/wishlistRouter'
 import profileRoutes from './routes/profileRouter';
 import productRoutes from './routes/productRouter';
 import cartRoutes from './routes/cartRouter';
+import kycRoutes from './routes/kycRouter';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
@@ -62,7 +63,8 @@ app.use((req, res, next) => {
 // 6. Routes
 app.use('/auth', userRoutes);
 app.use('/api/wishlist', wishListRoutes);
-app.use('/api', profileRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/api/kyc', kycRoutes)
 app.use('/api', productRoutes);
 app.use('/api', cartRoutes);
 
