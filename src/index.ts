@@ -5,6 +5,8 @@ import profileRoutes from './routes/profileRouter';
 import productRoutes from './routes/productRouter';
 import cartRoutes from './routes/cartRouter';
 import kycRoutes from './routes/kycRouter';
+import adminRoutes from './routes/adminRouter';
+import orderRoutes from './routes/orderRouter';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
@@ -56,7 +58,6 @@ app.use(cors(corsOptions));
 // 5. Request logging AFTER CORS (so CORS headers are already set)
 app.use((req, res, next) => {
   console.log('Request:', req.method, req.url, 'Origin:', req.get('Origin'));
-  console.log('Cookies:', req.cookies); // Log cookies for debugging
   next();
 });
 
@@ -67,6 +68,8 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/kyc', kycRoutes)
 app.use('/api', productRoutes);
 app.use('/api', cartRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/orders', orderRoutes);
 
 app.get('/', (req, res) => {
   res.send('Welcome to the API'); 

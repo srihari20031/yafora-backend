@@ -15,7 +15,7 @@ export class StorageService {
       throw new Error(`Failed to generate upload URL: ${error.message}`);
     }
 
-    return data.signedUrl;
+    return data.signedUrl; // Return only the signed URL as a string
   }
 
   async generatePresignedDownloadUrl(

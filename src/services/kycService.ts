@@ -59,72 +59,68 @@ export class KYCService {
   }
 
   // Generate signed URL for document upload
-  async generateUploadUrl(
-    userId: string, 
-    documentType: string, 
-    fileName: string, 
-    fileSize: number,
-    mimeType: string
-  ): Promise<SignedUrlResponse> {
-    // Enforce folder structure: kyc-documents/{userId}/{documentType}/{timestamp}-{fileName}
-    const fileKey = `${userId}/${documentType}/${Date.now()}-${fileName}`;
-    
-    // Generate signed URL for upload
-    const uploadUrl = await this.storageService.generatePresignedUploadUrl(
-      this.KYC_BUCKET, 
-      fileKey, 
-      mimeType,
-      3600 // 1 hour expiry
-    );
+ async generateUploadUrl(
+  userId: string, 
+  documentType: string, 
+  fileName: string, 
+  fileSize: number,
+  mimeType: string
+): Promise<SignedUrlResponse> {
+  const baseFileKey = `${userId}/${documentType}/${Date.now()}-${fileName}`;
+  
+  // Generate signed URL and get the actual path
+  const uploadUrl = await this.storageService.generatePresignedUploadUrl(
+    this.KYC_BUCKET, 
+    baseFileKey, 
+    mimeType,
+    3600
+  );
+  const fileKey = baseFileKey;
 
-    // Create pending document record
-    const { data, error } = await supabaseDB
-      .from('kyc_documents')
-      .insert({
-        user_id: userId,
-        document_type: documentType,
-        document_name: fileName,
-        file_path: fileKey,
-        file_size: fileSize,
-        mime_type: mimeType,
-        upload_status: 'pending'
-      })
-      .select()
-      .single();
+  const { data, error } = await supabaseDB
+    .from('kyc_documents')
+    .insert({
+      user_id: userId,
+      document_type: documentType,
+      document_name: fileName,
+      file_path: fileKey, // Store the actual path
+      file_size: fileSize,
+      mime_type: mimeType,
+      upload_status: 'pending',
+      is_current: true
+    })
+    .select()
+    .single();
 
-    if (error) throw new Error(`Failed to create document record: ${error.message}`);
+  if (error) throw new Error(`Failed to create document record: ${error.message}`);
 
-    return {
-      uploadUrl,
-      fileKey,
-      expiresIn: 3600
-    };
-  }
+  return {
+    uploadUrl,
+    fileKey, // Use the actual path
+    expiresIn: 3600
+  };
+}
 
   // Confirm document upload
-  async confirmDocumentUpload(userId: string, fileKey: string): Promise<KYCDocument> {
-    // Verify file exists in storage
-    const fileExists = await this.storageService.fileExists(this.KYC_BUCKET, fileKey);
-    if (!fileExists) {
-      throw new Error('File not found in storage');
-    }
+ async confirmDocumentUpload(userId: string, fileKey: string): Promise<KYCDocument> {
+  const fileExists = await this.storageService.fileExists(this.KYC_BUCKET, fileKey);
+  if (!fileExists) throw new Error('File not found in storage');
 
-    // Update document status
-    const { data, error } = await supabaseDB
-      .from('kyc_documents')
-      .update({ 
-        upload_status: 'uploaded',
-        updated_at: new Date().toISOString()
-      })
-      .eq('user_id', userId)
-      .eq('file_path', fileKey)
-      .select()
-      .single();
+  const { data, error } = await supabaseDB
+    .from('kyc_documents')
+    .update({ 
+      upload_status: 'uploaded',
+      is_current: true,
+      updated_at: new Date().toISOString()
+    })
+    .eq('user_id', userId)
+    .eq('file_path', fileKey)
+    .select()
+    .single();
 
-    if (error) throw new Error(`Failed to update document status: ${error.message}`);
-
-    return data as KYCDocument;
-  }
+  if (error) throw new Error(`Failed to update document status: ${error.message}`);
+  return data as KYCDocument;
+}
 
   // Get user's current KYC documents
   async getUserKYCDocuments(userId: string): Promise<KYCDocument[]> {
@@ -235,18 +231,74 @@ async submitKYCVerification(userId: string, documentIds: string[]): Promise<KYCV
   return verification;
 }
   // Admin: Get pending KYC verifications
-  async getPendingKYCVerifications(limit: number = 50, offset: number = 0): Promise<any[]> {
-    const { data, error } = await supabaseDB
+ async getPendingKYCVerifications(limit: number = 50, offset: number = 0): Promise<any[]> {
+  try {
+    // First, get the pending verifications
+    const { data: verifications, error: verificationError } = await supabaseDB
       .from('kyc_verification_summary')
       .select('*')
       .eq('verification_status', 'submitted')
       .order('submitted_at', { ascending: true })
       .range(offset, offset + limit - 1);
 
-    if (error) throw new Error(`Failed to fetch pending verifications: ${error.message}`);
+    if (verificationError) {
+      throw new Error(`Failed to fetch pending verifications: ${verificationError.message}`);
+    }
 
-    return data;
+    if (!verifications || verifications.length === 0) {
+      return [];
+    }
+
+    // For each verification, fetch the associated documents
+    const verificationsWithDocuments = await Promise.all(
+      verifications.map(async (verification) => {
+        // Get documents for this verification
+        const { data: documents, error: documentsError } = await supabaseDB
+          .from('kyc_documents')
+          .select(`
+            id,
+            user_id,
+            document_type,
+            document_name,
+            file_path,
+            file_size,
+            mime_type,
+            upload_status,
+            verification_status,
+            verified_by,
+            verification_notes,
+            expiry_date,
+            is_current,
+            created_at,
+            updated_at,
+            verified_at
+          `)
+          .eq('user_id', verification.user_id)
+          .eq('upload_status', 'uploaded')
+          .eq('is_current', true)
+          .order('created_at', { ascending: false });
+
+        if (documentsError) {
+          console.error('Error fetching documents for verification:', documentsError);
+          // Don't throw here, just return empty documents array
+        }
+
+        return {
+          ...verification,
+          documents: documents || [],
+          // Map the document types to match frontend expectations
+          documentType: documents?.map(doc => doc.document_type) || [],
+          documentName: documents?.map(doc => doc.document_name) || [],
+        };
+      })
+    );
+
+    return verificationsWithDocuments;
+  } catch (error) {
+    console.error('Error in getPendingKYCVerifications:', error);
+    throw error;
   }
+}
 
   // Admin: Approve/Reject KYC verification
   async reviewKYCVerification(
@@ -324,12 +376,14 @@ async submitKYCVerification(userId: string, documentIds: string[]): Promise<KYCV
     isKycVerified: boolean;
     currentVerification?: KYCVerification;
     documents: KYCDocument[];
+    adminNotes?: string;
   }> {
     const { data: profile, error: profileError } = await supabaseDB
       .from('profiles')
       .select('kyc_status, is_kyc_verified, current_kyc_verification_id')
       .eq('id', userId)
       .single();
+      
 
     if (profileError) throw new Error(`Failed to fetch profile: ${profileError.message}`);
 
@@ -344,11 +398,18 @@ async submitKYCVerification(userId: string, documentIds: string[]): Promise<KYCV
         .single();
       currentVerification = verification;
     }
+    console.log('[KYCService] Fetched KYC status for user:', userId, {
+      kycStatus: profile.kyc_status,
+      isKycVerified: profile.is_kyc_verified,
+      currentVerification,
+      documents: documents,
+    });
 
     return {
       kycStatus: profile.kyc_status,
       isKycVerified: profile.is_kyc_verified,
       currentVerification,
+      adminNotes: currentVerification.admin_notes,
       documents
     };
   }

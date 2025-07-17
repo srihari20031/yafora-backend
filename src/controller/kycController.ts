@@ -15,11 +15,13 @@ const kycService = new KYCService();
 
 export async function uploadKYCDocument(req: Request, res: Response): Promise<void> {
   const { userId } = req.params;
-  const { documentType } = req.body;
+  const { document_type } = req.body;
+
+
 
   console.log('[KYCController] uploadKYCDocument called:', {
     userId,
-    documentType,
+    document_type,
     fileCount: req.files ? (req.files as Express.Multer.File[]).length : 0,
   });
 
@@ -28,31 +30,41 @@ export async function uploadKYCDocument(req: Request, res: Response): Promise<vo
       throw new Error('No files uploaded');
     }
 
-    const file = req.files[0]; // Handle single file for simplicity
-    console.log('[KYCController] Processing file:', file.originalname);
+    const file = req.files[0];
+    console.log('[KYCController] Processing file:', {
+      originalname: file.originalname,
+      size: file.size,
+      mimetype: file.mimetype
+    });
 
-    const fileKey = `${userId}/${documentType}/${Date.now()}-${file.originalname}`;
-    const uploadUrl = await kycService.generateUploadUrl(
+    const uploadUrlResponse = await kycService.generateUploadUrl(
       userId,
-      documentType,
+      document_type,
       file.originalname,
       file.size,
       file.mimetype
     );
 
-    // Upload file to Supabase using the signed URL
-    const uploadResponse = await fetch(uploadUrl.uploadUrl, {
+    const { uploadUrl, fileKey } = uploadUrlResponse;
+
+    console.log('[KYCController] Generated upload URL:', { fileKey });
+
+    const uploadResponse = await fetch(uploadUrl, {
       method: 'PUT',
       body: file.buffer,
       headers: { 'Content-Type': file.mimetype },
     });
 
     if (!uploadResponse.ok) {
-      throw new Error('Failed to upload file to storage');
+      const errorText = await uploadResponse.text();
+      console.error('[KYCController] Upload failed:', { status: uploadResponse.status, errorText });
+      throw new Error(`Failed to upload file to storage: ${errorText}`);
     }
 
+    console.log('[KYCController] File uploaded to storage successfully');
+
     const document = await kycService.confirmDocumentUpload(userId, fileKey);
-    console.log('[KYCController] Document uploaded successfully:', document);
+    console.log('[KYCController] Document confirmed:', document);
 
     res.status(200).json({
       message: 'Document uploaded successfully',
@@ -62,6 +74,8 @@ export async function uploadKYCDocument(req: Request, res: Response): Promise<vo
     console.error('[KYCController] Error in uploadKYCDocument:', {
       error: (error as Error).message,
       stack: (error as Error).stack,
+      userId,
+      document_type
     });
     res.status(400).json({ error: (error as Error).message });
   }
@@ -108,6 +122,8 @@ export async function getUserKYCDocuments(req: Request, res: Response): Promise<
   
   try {
     const documents = await kycService.getUserKYCDocuments(userId);
+    console.log('[KYCController] Fetched KYC documents for user:', userId, documents.length, 'documents found');
+    console.log('[KYCController] Documents:', documents);
     res.status(200).json({ documents });
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
