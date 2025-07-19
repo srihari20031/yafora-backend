@@ -14,17 +14,17 @@ import {
 const router = Router();
 
 // Basic CRUD operations
-router.post('/products', uploadMiddleware, addProduct);
+router.post('/', uploadMiddleware, addProduct);
 
 // Specific routes FIRST (before :productId)
-router.get('/products/search', searchProductsHandler);
-router.get('/products/featured', getFeaturedProductsHandler);
-router.get('/products/category/:category', getProductsByCategories);
+router.get('/search', searchProductsHandler);
+router.get('/featured', getFeaturedProductsHandler);
+router.get('/category/:category', getProductsByCategories);
 
 // Generic routes LAST (after specific ones)
-router.get('/products/:productId', getProduct);
-router.put('/products/:productId', uploadMiddleware, editProduct);
-router.delete('/products/:productId', removeProduct);
+router.get('/:productId', getProduct);
+router.put('/:productId', uploadMiddleware, editProduct);
+router.delete('/:productId', removeProduct);
 
 // Seller-specific products
 router.get('/seller/:sellerId/products', getMyProducts);

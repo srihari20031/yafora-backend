@@ -1,22 +1,22 @@
 import { Router } from "express";
 import {
-  createNewRental,
-  getRental,
-  getBuyerRentals,
-  getSellerRentals,
-  updateRentalDetails,
-  updateRentalDeliveryStatus,
-  updateRentalPaymentStatus,
-  processRentalReturn,
-  reportRentalDamage,
-  reviewRentalDamage,
-  releaseRentalSecurityDeposit,
-  getActiveRentalsList,
-  getOverdueRentalsList,
-  cancelRentalOrder,
-  extendRental,
-  assignDeliveryPartner,
-  addAdminNote
+    createNewRental,
+    getRental,
+    getBuyerRentals,
+    getSellerRentals,
+    updateRentalDetails,
+    updateRentalDeliveryStatus,
+    updateRentalPaymentStatus,
+    processRentalReturn,
+    reportRentalDamage,
+    reviewRentalDamage,
+    releaseRentalSecurityDeposit,
+    getActiveRentalsList,
+    getOverdueRentalsList,
+    cancelRentalOrder,
+    extendRental,
+    assignDeliveryPartner,
+    addAdminNote
 } from "../controller/orderController";
 
 const router = Router();
