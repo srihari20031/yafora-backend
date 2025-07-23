@@ -8,6 +8,7 @@ import kycRoutes from './routes/kycRouter';
 import adminRoutes from './routes/adminRouter';
 import orderRoutes from './routes/orderRouter';
 import sellerOrderRoutes from './routes/sellerOrderRoutes';
+import reviewRoutes from './routes/reviewRouter';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
@@ -72,6 +73,7 @@ app.use('/api', cartRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/seller-orders', sellerOrderRoutes); 
+app.use('/api/reviews', reviewRoutes);
 
 app.get('/', (req, res) => {
   res.send('Welcome to the API'); 

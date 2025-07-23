@@ -2,8 +2,10 @@ import { Request, Response } from 'express';
 import {
   getSellerOrders,
   updateSellerOrderDeliveryStatus,
+  refundSecurityDeposit,
   reportSellerOrderDamage as reportSellerOrderDamageService,
-  cancelSellerOrder as cancelSellerOrderService
+  cancelSellerOrder as cancelSellerOrderService,
+  getSellerTotalTransactions
 } from '../services/sellerOrderService';
 
 export async function getSellerOrdersList(req: Request, res: Response): Promise<void> {
@@ -26,6 +28,21 @@ export async function updateSellerOrderDelivery(req: Request, res: Response): Pr
     const updatedOrder = await updateSellerOrderDeliveryStatus(orderId, status, sellerId);
     res.status(200).json({ 
       message: 'Delivery status updated successfully', 
+      order: updatedOrder 
+    });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+}
+
+export async function refundSecurityDepositController(req: Request, res: Response): Promise<void> {
+  const { orderId } = req.params;
+  const { sellerId } = req.body;
+
+  try {
+    const updatedOrder = await refundSecurityDeposit(orderId, sellerId);
+    res.status(200).json({ 
+      message: 'Security deposit refunded successfully', 
       order: updatedOrder 
     });
   } catch (err) {
@@ -57,6 +74,20 @@ export async function cancelSellerOrder(req: Request, res: Response): Promise<vo
     res.status(200).json({ 
       message: 'Order cancelled successfully', 
       order: cancelledOrder 
+    });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+}
+
+export async function getSellerTotalTransactionsController(req: Request, res: Response): Promise<void> {
+  const { sellerId } = req.params;
+
+  try {
+    const totals = await getSellerTotalTransactions(sellerId);
+    res.status(200).json({ 
+      message: 'Total transactions retrieved successfully', 
+      totals 
     });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
