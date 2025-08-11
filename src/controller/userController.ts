@@ -1,39 +1,64 @@
 import { Request, Response } from 'express';
-import { signUpUser, signInUser } from '../services/userService';
+import { 
+  signUpUser, 
+  signInUser, 
+  completeReferralForUser 
+} from '../services/userService';
 
 export async function signUp(req: Request, res: Response): Promise<void> {
-  const { email, password, fullName, role } = req.body;
-  
-  // Debug logging
-  console.log('SignUp request headers:', {
-    origin: req.get('Origin'),
-    userAgent: req.get('User-Agent'),
-    referer: req.get('Referer')
-  });
-  
-  // Validate required fields
+  const { 
+    email, 
+    password, 
+    fullName, 
+    role, 
+    phoneNumber, 
+    whatsappNotifications, 
+    emailNotifications,
+    referralCode // New field for referral code
+  } = req.body;
+
+  console.log("Request body: ", req.body);
+
   if (!email || !password || !fullName || !role) {
     res.status(400).json({
       error: 'Missing required fields',
-      details: 'Email, password, full name, and role are required'
+      details: 'Email, password, full name, and role are required',
     });
     return;
   }
-  
+
+  console.log("Signup details:", {
+    email, 
+    fullName, 
+    role, 
+    phoneNumber, 
+    whatsappNotifications, 
+    emailNotifications,
+    hasReferralCode: !!referralCode
+  });
+
   try {
-    const result = await signUpUser(email, password, fullName, role);
-    
+    const result = await signUpUser(
+      email, 
+      password, 
+      fullName, 
+      role, 
+      phoneNumber, 
+      whatsappNotifications, 
+      emailNotifications,
+      referralCode // Pass referral code to service
+    );
+
     console.log('SignUp result from service:', {
       hasUser: !!result.user,
       hasSession: !!result.session,
-      userConfirmed: result.user?.email_confirmed_at ? true : false
+      userConfirmed: result.user?.email_confirmed_at ? true : false,
+      referralProcessed: result.referralProcessed
     });
-    
-    // CORS headers
+
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Origin', req.get('Origin'));
-    
-    // Case 1: User created but no session (email confirmation required)
+
     if (result.user && !result.session) {
       console.log('✅ User created successfully - email confirmation required');
       res.status(201).json({
@@ -42,18 +67,17 @@ export async function signUp(req: Request, res: Response): Promise<void> {
         user: {
           id: result.user.id,
           email: result.user.email,
-          email_confirmed: false
+          email_confirmed: false,
         },
         requiresConfirmation: true,
-        debug: {
-          environment: process.env.NODE_ENV,
-          origin: req.get('Origin')
-        }
+        referralProcessed: result.referralProcessed,
+        referralMessage: result.referralProcessed ? 
+          'Your referral has been recorded! Your referrer will receive rewards when you complete your first action.' : 
+          undefined
       });
       return;
     }
-    
-    // Case 2: User created with session (auto-confirm enabled or email already confirmed)
+
     if (result.user && result.session?.access_token && result.session?.refresh_token) {
       console.log('✅ User created with session - sending tokens');
       res.status(201).json({
@@ -64,68 +88,41 @@ export async function signUp(req: Request, res: Response): Promise<void> {
         tokens: {
           access_token: result.session.access_token,
           refresh_token: result.session.refresh_token,
-          expires_at: result.session.expires_at
+          expires_at: result.session.expires_at,
         },
-        debug: {
-          environment: process.env.NODE_ENV,
-          origin: req.get('Origin')
-        }
-      });
-      return;
-    }
-    
-    // Case 3: Unexpected state
-    console.error('❌ Unexpected signup state:', result);
-    res.status(500).json({ 
-      error: 'Unexpected signup state',
-      details: 'User creation status unclear'
-    });
-    
-  } catch (err) {
-    console.error('💥 Signup error:', err);
-    
-    const error = err as Error;
-    
-    // Handle specific Supabase errors
-    if (error.message.includes('already registered') || error.message.includes('User already registered')) {
-      res.status(409).json({
-        error: 'Email already registered',
-        details: 'An account with this email already exists'
-      });
-      return;
-    }
-    
-    if (error.message.includes('Password')) {
-      res.status(400).json({
-        error: 'Invalid password',
-        details: error.message
-      });
-      return;
-    }
-    
-    if (error.message.includes('Email') || error.message.includes('email')) {
-      res.status(400).json({
-        error: 'Invalid email',
-        details: error.message
-      });
-      return;
-    }
-    
-    if (error.message.includes('Invalid role')) {
-      res.status(400).json({
-        error: 'Invalid role',
-        details: 'Role must be buyer, seller, or admin'
+        referralProcessed: result.referralProcessed,
+        referralMessage: result.referralProcessed ? 
+          'Welcome! Your referrer will receive rewards when you complete your first action.' : 
+          undefined
       });
       return;
     }
 
-    res.status(400).json({ 
+    console.error('❌ Unexpected signup state:', result);
+    res.status(500).json({
+      error: 'Unexpected signup state',
+      details: 'User creation status unclear',
+    });
+  } catch (err) {
+    console.error('💥 Signup error:', err);
+    const error = err as Error;
+    if (error.message.includes('already registered')) {
+      res.status(409).json({
+        error: 'Email already registered',
+        details: 'An account with this email already exists',
+      });
+      return;
+    }
+    res.status(400).json({
       error: 'Signup failed',
-      details: error.message 
+      details: error.message,
     });
   }
 }
 
+// ================================
+// SIGNIN CONTROLLER (No changes)
+// ================================
 export async function signIn(req: Request, res: Response): Promise<void> {
   const { email, password } = req.body;
 
@@ -210,6 +207,9 @@ export async function signIn(req: Request, res: Response): Promise<void> {
   }
 }
 
+// ================================
+// SIGNOUT CONTROLLER (No changes)
+// ================================
 export async function signOut(req: Request, res: Response): Promise<void> {
   try {
     console.log('SignOut request received');
@@ -231,21 +231,32 @@ export async function signOut(req: Request, res: Response): Promise<void> {
   }
 }
 
-// Test endpoint for debugging
-export async function testTokens(req: Request, res: Response): Promise<void> {
-  console.log('Test tokens endpoint called');
-  console.log('Request origin:', req.get('Origin'));
-  console.log('NODE_ENV:', process.env.NODE_ENV);
-  
-  // CORS headers
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Origin', req.get('Origin'));
-  
-  res.json({
-    success: true,
-    message: 'Test endpoint working',
-    environment: process.env.NODE_ENV,
-    origin: req.get('Origin'),
-    timestamp: new Date().toISOString()
-  });
+// ================================
+// COMPLETE REFERRAL CONTROLLER
+// ================================
+export async function completeReferralController(req: Request, res: Response): Promise<void> {
+  try {
+    const { userId, actionType = 'first_purchase' } = req.body;
+
+    if (!userId) {
+      res.status(400).json({
+        error: 'Missing required field',
+        details: 'User ID is required'
+      });
+      return;
+    }
+
+    await completeReferralForUser(userId, actionType);
+
+    res.status(200).json({
+      success: true,
+      message: 'Referral completion processed successfully'
+    });
+  } catch (error) {
+    console.error('💥 Error completing referral:', error);
+    res.status(500).json({
+      error: 'Failed to complete referral',
+      details: (error as Error).message
+    });
+  }
 }

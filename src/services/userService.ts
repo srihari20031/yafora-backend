@@ -1,79 +1,173 @@
 import supabaseDB from "../../config/connectDB";
 
-export async function signUpUser(email: string, password: string, fullName: string, role: string) {
+// ================================
+// VALIDATE REFERRAL CODE DURING SIGNUP
+// ================================
+async function validateAndProcessReferral(referralCode: string, newUserId: string): Promise<void> {
+  try {
+    // Validate referral code
+    const { data: referrer, error: referrerError } = await supabaseDB
+      .from('profiles')
+      .select('id, full_name')
+      .eq('referral_code', referralCode)
+      .single();
+
+    if (referrerError || !referrer) {
+      throw new Error('Invalid referral code');
+    }
+
+    // Don't allow self-referral (though this should be impossible during signup)
+    if (referrer.id === newUserId) {
+      throw new Error('Cannot refer yourself');
+    }
+
+    // Create referral record
+    const { error: insertError } = await supabaseDB
+      .from('referrals')
+      .insert({
+        referrer_id: referrer.id,
+        referred_id: newUserId,
+        referral_code: referralCode,
+        reward_amount: 100, // Configure your reward amount
+        status: 'pending',
+      });
+
+    if (insertError) {
+      throw new Error(`Failed to create referral record: ${insertError.message}`);
+    }
+
+    console.log(`✅ Referral processed: ${referrer.full_name} referred new user ${newUserId}`);
+  } catch (error) {
+    // Log the error but don't fail the signup process
+    console.error(`⚠️ Referral processing failed (non-critical): ${(error as Error).message}`);
+  }
+}
+
+// ================================
+// SIGNUP FUNCTION
+// ================================
+export async function signUpUser(
+  email: string,
+  password: string,
+  fullName: string,
+  role: string,
+  phoneNumber?: string,
+  whatsappNotifications?: boolean,
+  emailNotifications?: boolean,
+  referralCode?: string // New parameter for referral code
+) {
   const lowercaseRole = role.toLowerCase();
-  
-  // Validate role
-  if (!['buyer', 'seller', 'admin'].includes(lowercaseRole)) {
-    throw new Error('Invalid role. Must be buyer, seller, or admin.');
+
+  if (!['buyer', 'seller'].includes(lowercaseRole)) {
+    throw new Error('Invalid role. Must be buyer or seller.');
   }
 
-  // Validate email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
     throw new Error('Invalid email format');
   }
 
-  // Validate password strength (optional - adjust as needed)
   if (password.length < 6) {
     throw new Error('Password must be at least 6 characters long');
   }
 
+  if (phoneNumber && !/^\+?\d{10,15}$/.test(phoneNumber)) {
+    throw new Error('Invalid phone number format');
+  }
+
+  // Validate referral code if provided (but don't fail signup if invalid)
+  let referralValid = false;
+  if (referralCode) {
+    try {
+      const { data: referrer, error } = await supabaseDB
+        .from('profiles')
+        .select('id')
+        .eq('referral_code', referralCode.trim())
+        .single();
+
+      referralValid = !error && !!referrer;
+      if (!referralValid) {
+        console.warn(`⚠️ Invalid referral code provided during signup: ${referralCode}`);
+      }
+    } catch (error) {
+      console.warn(`⚠️ Error validating referral code: ${(error as Error).message}`);
+    }
+  }
+
   try {
     const { data, error } = await supabaseDB.auth.signUp({
-      email: email.toLowerCase().trim(), // Normalize email
+      email: email.toLowerCase().trim(),
       password,
       options: {
         data: {
           full_name: fullName.trim(),
           role: lowercaseRole,
-        }
-      }
-    });
-
-    console.log('SignUp Data:', {
-      user: data.user ? { id: data.user.id, email: data.user.email, confirmed: !!data.user.email_confirmed_at } : null,
-      session: data.session ? 'Present' : 'Null',
-      error: error ? error.message : 'None'
+          phone_number: phoneNumber,
+          whatsapp_notifications: whatsappNotifications ?? false,
+          email_notifications: emailNotifications ?? true,
+          referral_code: referralCode?.trim(), // Store referral code in user metadata
+        },
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_BASE_URL}/auth/callback?role=${lowercaseRole}`,
+      },
     });
 
     if (error) {
-      // Handle specific Supabase errors
       if (error.message.includes('already registered')) {
         throw new Error('An account with this email already exists');
       }
       throw new Error(error.message);
     }
 
-    // If we have both user and session (auto-confirm enabled), update profile
-    if (data.user && data.session) {
-      console.log('✅ User created with session - updating profile');
-      
+    // Update or insert profile data
+    if (data.user) {
+      console.log('✅ User created - updating/inserting profile');
       try {
         const { error: profileError } = await supabaseDB
-          .from("profiles")
-          .update({
+          .from('profiles')
+          .upsert({
+            id: data.user.id,
+            email: email.toLowerCase().trim(),
             full_name: fullName.trim(),
             role: lowercaseRole,
+            phone_number: phoneNumber,
+            whatsapp_notifications: whatsappNotifications ?? false,
+            email_notifications: emailNotifications ?? true,
+            is_kyc_verified: false,
+            kyc_status: 'not_started',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            // referral_code will be auto-generated by the trigger
           })
-          .eq("id", data.user.id);
+          .eq('id', data.user.id);
 
         if (profileError) {
-          console.warn('⚠️ Profile update error (non-critical):', profileError);
-          // Don't throw here as the user was created successfully
+          console.warn('⚠️ Profile upsert error (non-critical):', profileError);
+        } else {
+          console.log('✅ Profile upsert successful');
+          
+          // Process referral if valid code was provided
+          if (referralValid && referralCode) {
+            await validateAndProcessReferral(referralCode.trim(), data.user.id);
+          }
         }
       } catch (profileError) {
-        console.warn('⚠️ Profile update exception (non-critical):', profileError);
+        console.warn('⚠️ Profile upsert exception (non-critical):', profileError);
       }
     }
 
-    return data;
+    return {
+      ...data,
+      referralProcessed: referralValid && !!referralCode
+    };
   } catch (error) {
     console.error('💥 SignUp service error:', error);
     throw error;
   }
 }
 
+// ================================
+// SIGNIN FUNCTION (No changes needed)
+// ================================
 export async function signInUser(email: string, password: string) {
   // Validate inputs
   if (!email || !password) {
@@ -87,7 +181,7 @@ export async function signInUser(email: string, password: string) {
 
   try {
     const { data, error } = await supabaseDB.auth.signInWithPassword({
-      email: email.toLowerCase().trim(), // Normalize email
+      email: email.toLowerCase().trim(),
       password,
     });
 
@@ -98,7 +192,6 @@ export async function signInUser(email: string, password: string) {
     });
 
     if (error) {
-      // Handle specific sign-in errors
       if (error.message.includes('Invalid login credentials')) {
         throw new Error('Invalid email or password');
       }
@@ -116,5 +209,53 @@ export async function signInUser(email: string, password: string) {
   } catch (error) {
     console.error('💥 SignIn service error:', error);
     throw error;
+  }
+}
+
+// ================================
+// COMPLETE REFERRAL WHEN USER MAKES FIRST ACTION
+// ================================
+export async function completeReferralForUser(userId: string, actionType: string = 'first_purchase'): Promise<void> {
+  try {
+    // Find pending referral for this user
+    const { data: referral, error: fetchError } = await supabaseDB
+      .from('referrals')
+      .select('*')
+      .eq('referred_id', userId)
+      .eq('status', 'pending')
+      .single();
+
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      throw new Error(`Failed to fetch referral: ${fetchError.message}`);
+    }
+
+    if (!referral) {
+      // No pending referral found
+      return;
+    }
+
+    // Update referral status to completed
+    const { error: updateError } = await supabaseDB
+      .from('referrals')
+      .update({ 
+        status: 'completed',
+        // You can add a field to track what action completed the referral
+        // completion_action: actionType 
+      })
+      .eq('id', referral.id);
+
+    if (updateError) {
+      throw new Error(`Failed to complete referral: ${updateError.message}`);
+    }
+
+    console.log(`✅ Referral completed! User ${referral.referrer_id} earned ₹${referral.reward_amount} from ${actionType}`);
+
+    // Here you can add logic to actually give the reward:
+    // - Add money to referrer's wallet
+    // - Send notification
+    // - Create transaction record, etc.
+
+  } catch (error) {
+    console.error(`⚠️ Failed to complete referral: ${(error as Error).message}`);
   }
 }

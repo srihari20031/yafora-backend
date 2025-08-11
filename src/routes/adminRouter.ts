@@ -35,6 +35,7 @@ router.delete('/commissions/:commissionId', authMiddleware, adminMiddleware, Adm
 
 // Marketing management routes
 router.post('/referrals', authMiddleware, adminMiddleware, AdminController.manageReferralProgram);
+router.get('/referrals', authMiddleware, adminMiddleware, AdminController.getAllReferrals)
 router.post('/promos', authMiddleware, adminMiddleware, AdminController.managePromoCode);
 router.get('/promos', authMiddleware, adminMiddleware, AdminController.getAllPromoCodes);
 router.patch('/orders/:orderId/promo', authMiddleware, adminMiddleware, AdminController.applyPromoCode);
@@ -42,5 +43,11 @@ router.patch('/orders/:orderId/promo', authMiddleware, adminMiddleware, AdminCon
 // Delivery management routes
 router.post('/delivery/assign', authMiddleware, adminMiddleware, AdminController.assignDelivery);
 router.get('/delivery/missed', authMiddleware, adminMiddleware, AdminController.getMissedPickups);
+
+//referral rewards management routes
+router.get('/referral-rewards', authMiddleware, adminMiddleware, AdminController.getReferralRewards);
+router.post('/referral-rewards', authMiddleware, adminMiddleware, AdminController.createReferralReward);
+router.patch('/referral-rewards/:rewardId', authMiddleware, adminMiddleware, AdminController.updateReferralReward);
+router.delete('/referral-rewards/:rewardId', authMiddleware, adminMiddleware, AdminController.deleteReferralReward);
 
 export default router;

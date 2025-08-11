@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as AdminService from '../services/adminService';
+import { NotificationHelpers, NotificationTriggers } from '../../utils/notificationTriggers';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -111,7 +112,20 @@ export async function updateOrderStatus(req: AuthenticatedRequest, res: Response
       res.status(400).json({ error: 'Invalid status' });
       return;
     }
+
     const updatedOrder = await AdminService.updateOrderStatus(orderId, status);
+    
+    // Trigger notifications based on status change
+    await NotificationHelpers.handleOrderStatusUpdate(orderId, status, {
+      sellerId: updatedOrder.seller_id,
+      buyerId: updatedOrder.buyer_id,
+      productName: updatedOrder.product_name,
+      buyerName: updatedOrder.buyer_name,
+      rentalDate: updatedOrder.rental_date,
+      deliveryMethod: updatedOrder.delivery_method,
+      amount: updatedOrder.total_amount
+    });
+
     res.status(200).json(updatedOrder);
   } catch (error) {
     console.error('Error updating order status:', (error as Error).message);
@@ -127,13 +141,24 @@ export async function applyLateFee(req: AuthenticatedRequest, res: Response): Pr
       res.status(400).json({ error: 'Order ID and valid amount are required' });
       return;
     }
+
     const updatedOrder = await AdminService.applyLateFee(orderId, amount);
+    
+    // Trigger late fee notifications
+    await NotificationHelpers.handleLateFeeApplication(orderId, amount, {
+      buyerId: updatedOrder.buyer_id,
+      sellerId: updatedOrder.seller_id,
+      productName: updatedOrder.product_name,
+      buyerName: updatedOrder.buyer_name
+    });
+
     res.status(200).json(updatedOrder);
   } catch (error) {
     console.error('Error applying late fee:', (error as Error).message);
     res.status(500).json({ error: (error as Error).message });
   }
 }
+
 
 export async function handleDamageClaim(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
@@ -147,7 +172,19 @@ export async function handleDamageClaim(req: AuthenticatedRequest, res: Response
       res.status(400).json({ error: 'Valid amount is required for approval' });
       return;
     }
+
     const updatedOrder = await AdminService.handleDamageClaim(orderId, { action, amount });
+    
+    // Trigger damage claim notifications
+    if (action === 'approve') {
+      await NotificationTriggers.triggerDamageReported(
+        updatedOrder.seller_id,
+        updatedOrder.buyer_id,
+        updatedOrder.product_name,
+        orderId
+      );
+    }
+
     res.status(200).json(updatedOrder);
   } catch (error) {
     console.error('Error handling damage claim:', (error as Error).message);
@@ -209,7 +246,16 @@ export async function processSecurityDeposit(req: AuthenticatedRequest, res: Res
       res.status(400).json({ error: 'Valid refund amount is required for partial refunds' });
       return;
     }
+
     const updatedOrder = await AdminService.processSecurityDeposit(orderId, action, refundAmount);
+    
+    // Trigger security deposit processing notifications
+    await NotificationHelpers.handleSecurityDepositProcessing(orderId, action, {
+      buyerId: updatedOrder.buyer_id,
+      sellerId: updatedOrder.seller_id,
+      productName: updatedOrder.product_name
+    });
+
     res.status(200).json(updatedOrder);
   } catch (error) {
     console.error('Error processing security deposit:', (error as Error).message);
@@ -236,7 +282,18 @@ export async function processWithdrawalRequest(req: AuthenticatedRequest, res: R
       res.status(400).json({ error: 'Payment ID and valid status (processing/paid) are required' });
       return;
     }
+
     const updatedPayment = await AdminService.processWithdrawalRequest(paymentId, status);
+    
+    // Trigger payout notification when payment is marked as paid
+    if (status === 'paid') {
+      await NotificationTriggers.triggerPayoutSent(
+        updatedPayment.seller_id,
+        updatedPayment.amount.toString(),
+        updatedPayment.product_name || 'Multiple Products'
+      );
+    }
+
     res.status(200).json(updatedPayment);
   } catch (error) {
     console.error('Error processing withdrawal request:', (error as Error).message);
@@ -270,6 +327,7 @@ export async function manageReferralProgram(req: AuthenticatedRequest, res: Resp
 export async function managePromoCode(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const { action, promoData } = req.body;
+    console.log(action, promoData);
     if (!action || !['create', 'update'].includes(action)) {
       res.status(400).json({ error: 'Valid action (create/update) is required' });
       return;
@@ -292,6 +350,8 @@ export async function managePromoCode(req: AuthenticatedRequest, res: Response):
         specific_user_ids: promoData.specific_user_ids,
         max_usage_count: promoData.max_usage_count,
       });
+
+      console.log('Promo code created:', result);
     } else {
       if (!promoData.id) {
         res.status(400).json({ error: 'Promo ID is required for update' });
@@ -449,6 +509,61 @@ export async function getCommissions(req: AuthenticatedRequest, res: Response): 
     res.status(200).json(commissions);
   } catch (error) {
     console.error("Error fetching commissions:", (error as Error).message);
+    res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+export async function getAllReferrals(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const referrals = await AdminService.getAllReferrals();
+    res.status(200).json(referrals);
+  } catch (error) {
+    console.error('Error fetching referrals:', (error as Error).message);
+    res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+export async function getReferralRewards(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const rewards = await AdminService.getAllReferralRewards();
+    res.status(200).json(rewards);
+  } catch (error) {
+    console.error('Error fetching referral rewards:', (error as Error).message);
+    res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+export async function createReferralReward(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const rewardData = req.body;
+    console.log("Reward data:", rewardData);
+    const newReward = await AdminService.createReferralReward(rewardData);
+    res.status(201).json(newReward);
+  } catch (error) {
+    console.error('Error creating referral reward:', (error as Error).message);
+    res.status(400).json({ error: (error as Error).message });
+  }
+}
+
+export async function updateReferralReward(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { rewardId } = req.params;
+    const rewardData = req.body;
+    const updatedReward = await AdminService.updateReferralReward(rewardId, rewardData);
+    res.status(200).json(updatedReward);
+  } catch (error) {
+    console.error('Error updating referral reward:', (error as Error).message);
+    res.status(400).json({ error: (error as Error).message });
+  }
+}
+
+export async function deleteReferralReward(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { rewardId } = req.params;
+    await AdminService.deleteReferralReward(rewardId);
+    res.status(200).json({ message: 'Referral reward deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting referral reward:', (error as Error).message);
     res.status(500).json({ error: (error as Error).message });
   }
 }

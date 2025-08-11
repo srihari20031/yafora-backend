@@ -32,6 +32,24 @@ interface PromoData {
   userEligibility?: string;
 }
 
+interface Referral {
+id: string
+referrer_id: string
+referred_id: string | null
+referral_code: string
+reward_amount: number
+status: "pending" | "completed" | "expired"
+created_at: string
+reward_credited_at: string | null
+reward_status: "pending" | "credited" | "redeemed"
+}
+// interface ReferralData {
+// referrer_id: string
+// rewardAmount: number
+// referral_code: string
+// status?: "pending" | "completed" | "expired"
+// }
+
 
 export async function getAllUsers() {
   const { data, error } = await supabaseDB
@@ -331,6 +349,19 @@ export async function manageReferralProgram(
   } else {
     throw new Error('Invalid action or missing data');
   }
+}
+
+export async function getAllReferrals(): Promise<Referral[]> {
+  const { data, error } = await supabaseDB
+    .from('referrals')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to fetch referrals: ${error.message}`);
+  }
+
+  return data;
 }
 
 export async function managePromoCode(action: 'create' | 'update', promoData: PromoData) {
@@ -866,4 +897,90 @@ export async function getCommissions() {
     created_at: commission.created_at,
     product_title: commission.products?.[0]?.title || null,
   }))
+}
+
+export async function getAllReferralRewards(): Promise<any[]> {
+  const { data, error } = await supabaseDB
+    .from('referral_rewards')
+    .select(`
+      *,
+      promo_codes (
+        code,
+        discount_type,
+        discount_value,
+        expiry_date
+      )
+    `)
+    .order('required_referrals', { ascending: true });
+
+  if (error) {
+    throw new Error(`Failed to fetch referral rewards: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function createReferralReward(rewardData: {
+  required_referrals: number;
+  promo_code_id: string;
+  description?: string;
+  is_active?: boolean;
+}): Promise<any> {
+  if (rewardData.required_referrals <= 0) {
+    throw new Error('Required referrals must be positive');
+  }
+
+  // Verify the promo exists
+  const { data: promo, error: promoError } = await supabaseDB
+    .from('promo_codes')
+    .select('id')
+    .eq('id', rewardData.promo_code_id)
+    .single();
+
+  if (promoError || !promo) {
+    throw new Error('Invalid promo code ID');
+  }
+
+  const { data, error } = await supabaseDB
+    .from('referral_rewards')
+    .insert([rewardData])
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to create referral reward: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function updateReferralReward(rewardId: string, rewardData: Partial<{
+  required_referrals: number;
+  promo_code_id: string;
+  description?: string;
+  is_active?: boolean;
+}>): Promise<any> {
+  const { data, error } = await supabaseDB
+    .from('referral_rewards')
+    .update(rewardData)
+    .eq('id', rewardId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update referral reward: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function deleteReferralReward(rewardId: string): Promise<void> {
+  const { error } = await supabaseDB
+    .from('referral_rewards')
+    .delete()
+    .eq('id', rewardId);
+
+  if (error) {
+    throw new Error(`Failed to delete referral reward: ${error.message}`);
+  }
 }

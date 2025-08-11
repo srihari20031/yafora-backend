@@ -51,7 +51,7 @@ export async function uploadKYCDocument(req: Request, res: Response): Promise<vo
 
     const uploadResponse = await fetch(uploadUrl, {
       method: 'PUT',
-      body: file.buffer,
+      body: new Uint8Array(file.buffer),
       headers: { 'Content-Type': file.mimetype },
     });
 

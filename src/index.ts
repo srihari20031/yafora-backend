@@ -9,8 +9,10 @@ import adminRoutes from './routes/adminRouter';
 import orderRoutes from './routes/orderRouter';
 import sellerOrderRoutes from './routes/sellerOrderRoutes';
 import reviewRoutes from './routes/reviewRouter';
+import promotionRoutes from './routes/promoCodeAndReferralRouter'
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+
 
 const app = express();
 
@@ -74,6 +76,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/seller-orders', sellerOrderRoutes); 
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/promotions', promotionRoutes)
 
 app.get('/', (req, res) => {
   res.send('Welcome to the API'); 
@@ -90,5 +93,7 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+
 
 export default app;
