@@ -10,6 +10,7 @@ import orderRoutes from './routes/orderRouter';
 import sellerOrderRoutes from './routes/sellerOrderRoutes';
 import reviewRoutes from './routes/reviewRouter';
 import promotionRoutes from './routes/promoCodeAndReferralRouter'
+import adminDashboardRouter from './routes/adminDashboardRouter';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
@@ -77,6 +78,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/seller-orders', sellerOrderRoutes); 
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/promotions', promotionRoutes)
+app.use('/api/admin-dashboard', adminDashboardRouter);
 
 app.get('/', (req, res) => {
   res.send('Welcome to the API'); 

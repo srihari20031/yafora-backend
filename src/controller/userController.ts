@@ -1,8 +1,12 @@
+// controller/userController.ts (updated)
+
 import { Request, Response } from 'express';
 import { 
   signUpUser, 
   signInUser, 
-  completeReferralForUser 
+  completeReferralForUser,
+  requestPasswordReset,
+  resetPassword,
 } from '../services/userService';
 
 export async function signUp(req: Request, res: Response): Promise<void> {
@@ -121,7 +125,7 @@ export async function signUp(req: Request, res: Response): Promise<void> {
 }
 
 // ================================
-// SIGNIN CONTROLLER (No changes)
+// SIGNIN CONTROLLER
 // ================================
 export async function signIn(req: Request, res: Response): Promise<void> {
   const { email, password } = req.body;
@@ -208,7 +212,7 @@ export async function signIn(req: Request, res: Response): Promise<void> {
 }
 
 // ================================
-// SIGNOUT CONTROLLER (No changes)
+// SIGNOUT CONTROLLER
 // ================================
 export async function signOut(req: Request, res: Response): Promise<void> {
   try {
@@ -257,6 +261,68 @@ export async function completeReferralController(req: Request, res: Response): P
     res.status(500).json({
       error: 'Failed to complete referral',
       details: (error as Error).message
+    });
+  }
+}
+
+// ================================
+// FORGOT PASSWORD CONTROLLER
+// ================================
+export async function forgotPassword(req: Request, res: Response): Promise<void> {
+  const { email } = req.body;
+
+  if (!email) {
+    res.status(400).json({
+      error: 'Missing required field',
+      details: 'Email is required'
+    });
+    return;
+  }
+
+  try {
+    await requestPasswordReset(email);
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset email sent. Please check your inbox.'
+    });
+  } catch (err) {
+    console.error('💥 Forgot password error:', err);
+    const error = err as Error;
+    res.status(400).json({
+      error: 'Failed to send reset email',
+      details: error.message
+    });
+  }
+}
+
+// ================================
+// RESET PASSWORD CONTROLLER
+// ================================
+export async function resetPasswordController(req: Request, res: Response): Promise<void> {
+  const { token, password } = req.body;
+
+  if (!token || !password) {
+    res.status(400).json({
+      error: 'Missing required fields',
+      details: 'Token and password are required'
+    });
+    return;
+  }
+
+  try {
+    await resetPassword(token, password);
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successful. You can now sign in with your new password.'
+    });
+  } catch (err) {
+    console.error('💥 Reset password error:', err);
+    const error = err as Error;
+    res.status(400).json({
+      error: 'Failed to reset password',
+      details: error.message
     });
   }
 }
