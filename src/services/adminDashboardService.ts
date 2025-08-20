@@ -280,6 +280,7 @@ export async function getOrderAnalytics(period: string, days: number): Promise<O
   }
 }
 
+
 // Revenue analytics with trends
 export async function getRevenueAnalytics(period: string, days: number): Promise<RevenueAnalytics> {
   const startDate = formatDateForSupabase(days);
