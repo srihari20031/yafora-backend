@@ -31,8 +31,6 @@ router.get('/commissions', authMiddleware, adminMiddleware, AdminController.getC
 router.patch('/commissions/:commissionId', authMiddleware, adminMiddleware, AdminController.createOrUpdateCommission);
 router.delete('/commissions/:commissionId', authMiddleware, adminMiddleware, AdminController.deleteCommission);
 
-
-
 // Marketing management routes
 router.post('/referrals', authMiddleware, adminMiddleware, AdminController.manageReferralProgram);
 router.get('/referrals', authMiddleware, adminMiddleware, AdminController.getAllReferrals)
@@ -49,5 +47,18 @@ router.get('/referral-rewards', authMiddleware, adminMiddleware, AdminController
 router.post('/referral-rewards', authMiddleware, adminMiddleware, AdminController.createReferralReward);
 router.patch('/referral-rewards/:rewardId', authMiddleware, adminMiddleware, AdminController.updateReferralReward);
 router.delete('/referral-rewards/:rewardId', authMiddleware, adminMiddleware, AdminController.deleteReferralReward);
+
+//delivery-partner
+router.get('/delivery-partners', authMiddleware, adminMiddleware, AdminController.getAllDeliveryPartners);
+router.get('/delivery-partners/:deliveryPartnerId/stats', authMiddleware, adminMiddleware, AdminController.getDeliveryPartnerStats);
+
+// FIXED: Split the problematic optional parameter route into two separate routes
+router.get('/delivery-assignments', authMiddleware, adminMiddleware, AdminController.getDeliveryPartnerAssignments);
+router.get('/delivery-assignments/:deliveryPartnerId', authMiddleware, adminMiddleware, AdminController.getDeliveryPartnerAssignments);
+
+router.get('/orders/needs-delivery', authMiddleware, adminMiddleware, AdminController.getOrdersNeedingDelivery);
+router.post('/delivery/assign-partner', authMiddleware, adminMiddleware, AdminController.assignDeliveryPartner);
+router.patch('/delivery/reassign/:orderId', authMiddleware, adminMiddleware, AdminController.reassignDeliveryPartner);
+router.delete('/delivery/remove-assignment/:orderId', authMiddleware, adminMiddleware, AdminController.removeDeliveryAssignment);
 
 export default router;

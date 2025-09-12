@@ -984,3 +984,288 @@ export async function deleteReferralReward(rewardId: string): Promise<void> {
     throw new Error(`Failed to delete referral reward: ${error.message}`);
   }
 }
+
+export async function getAllDeliveryPartners() {
+  const { data, error } = await supabaseDB
+    .from('profiles')
+    .select(`
+      id,
+      full_name,
+      email,
+      phone_number,
+      pickup_address,
+      delivery_address,
+      is_kyc_verified,
+      kyc_status,
+      created_at
+    `)
+    .eq('role', 'delivery_partner')
+    .order('full_name', { ascending: true });
+    
+  if (error) {
+    throw new Error(`Failed to fetch delivery partners: ${error.message}`);
+  }
+  
+  return data;
+}
+
+// Get delivery partner assignments (active and recent)
+export async function getDeliveryPartnerAssignments(deliveryPartnerId?: string) {
+  let query = supabaseDB
+    .from('delivery_assignments')
+    .select(`
+      id,
+      delivery_partner_id,
+      order_id,
+      status,
+      assigned_at,
+      accepted_at,
+      completed_at,
+      assignment_type,
+      notes,
+      orders (
+        id,
+        delivery_status,
+        pickup_address,
+        delivery_address,
+        rental_start_date,
+        rental_end_date,
+        products (
+          title
+        ),
+        buyer:profiles!orders_buyer_id_fkey (
+          full_name,
+          phone_number
+        ),
+        seller:profiles!orders_seller_id_fkey (
+          full_name,
+          phone_number
+        )
+      ),
+      profiles!delivery_assignments_delivery_partner_id_fkey (
+        full_name,
+        email,
+        phone_number
+      )
+    `)
+    .order('assigned_at', { ascending: false });
+
+  if (deliveryPartnerId) {
+    query = query.eq('delivery_partner_id', deliveryPartnerId);
+  }
+
+  const { data, error } = await query;
+    
+  if (error) {
+    throw new Error(`Failed to fetch delivery assignments: ${error.message}`);
+  }
+  
+  return data;
+}
+
+// Get orders that need delivery assignment
+export async function getOrdersNeedingDelivery() {
+  const { data, error } = await supabaseDB
+    .from('orders')
+    .select(`
+      id,
+      buyer_id,
+      seller_id,
+      delivery_status,
+      pickup_address,
+      delivery_address,
+      rental_start_date,
+      rental_end_date,
+      total_amount,
+      created_at,
+      products (
+        title,
+        category
+      ),
+      buyer:profiles!orders_buyer_id_fkey (
+        full_name,
+        phone_number
+      ),
+      seller:profiles!orders_seller_id_fkey (
+        full_name,
+        phone_number
+      )
+    `)
+    .in('delivery_status', ['pending', 'accepted'])
+    .is('delivery_partner_id', null)
+    .order('created_at', { ascending: false });
+    
+  if (error) {
+    throw new Error(`Failed to fetch orders needing delivery: ${error.message}`);
+  }
+  
+  return data;
+}
+
+// Assign delivery partner to order
+export async function assignDeliveryPartner(orderId: string, deliveryPartnerId: string, assignedBy: string, notes?: string) {
+  // Start a transaction
+  const { data: order, error: orderError } = await supabaseDB
+    .from('orders')
+    .select('id, delivery_partner_id')
+    .eq('id', orderId)
+    .single();
+    
+  if (orderError) {
+    throw new Error(`Failed to fetch order: ${orderError.message}`);
+  }
+  
+  if (order.delivery_partner_id) {
+    throw new Error('Order already has a delivery partner assigned');
+  }
+
+  // Create delivery assignment record
+  const { data: assignment, error: assignmentError } = await supabaseDB
+    .from('delivery_assignments')
+    .insert([{
+      order_id: orderId,
+      delivery_partner_id: deliveryPartnerId,
+      assigned_by: assignedBy,
+      assignment_type: 'manual',
+      status: 'assigned',
+      notes: notes
+    }])
+    .select()
+    .single();
+    
+  if (assignmentError) {
+    throw new Error(`Failed to create delivery assignment: ${assignmentError.message}`);
+  }
+
+  // Update order with delivery partner
+  const { data: updatedOrder, error: updateError } = await supabaseDB
+    .from('orders')
+    .update({ 
+      delivery_partner_id: deliveryPartnerId,
+      delivery_assigned_at: new Date().toISOString(),
+      delivery_assignment_type: 'manual'
+    })
+    .eq('id', orderId)
+    .select(`
+      *,
+      products (title),
+      delivery_partner:profiles!orders_delivery_partner_id_fkey (
+        full_name,
+        email,
+        phone_number
+      )
+    `)
+    .single();
+    
+  if (updateError) {
+    // Rollback delivery assignment
+    await supabaseDB
+      .from('delivery_assignments')
+      .delete()
+      .eq('id', assignment.id);
+      
+    throw new Error(`Failed to update order: ${updateError.message}`);
+  }
+  
+  return {
+    order: updatedOrder,
+    assignment: assignment
+  };
+}
+
+// Reassign delivery partner
+export async function reassignDeliveryPartner(orderId: string, newDeliveryPartnerId: string, reassignedBy: string, reason?: string) {
+  // Cancel current assignment
+  const { error: cancelError } = await supabaseDB
+    .from('delivery_assignments')
+    .update({ 
+      status: 'cancelled',
+      cancelled_at: new Date().toISOString(),
+      notes: reason ? `Reassigned: ${reason}` : 'Reassigned to different partner'
+    })
+    .eq('order_id', orderId)
+    .in('status', ['assigned', 'accepted']);
+    
+  if (cancelError) {
+    throw new Error(`Failed to cancel current assignment: ${cancelError.message}`);
+  }
+
+  // Create new assignment
+  return await assignDeliveryPartner(orderId, newDeliveryPartnerId, reassignedBy, reason);
+}
+
+// Remove delivery assignment
+export async function removeDeliveryAssignment(orderId: string, removedBy: string, reason?: string) {
+  // Cancel delivery assignment
+  const { error: assignmentError } = await supabaseDB
+    .from('delivery_assignments')
+    .update({ 
+      status: 'cancelled',
+      cancelled_at: new Date().toISOString(),
+      notes: reason ? `Removed: ${reason}` : 'Assignment removed by admin'
+    })
+    .eq('order_id', orderId)
+    .in('status', ['assigned', 'accepted']);
+    
+  if (assignmentError) {
+    throw new Error(`Failed to cancel assignment: ${assignmentError.message}`);
+  }
+
+  // Remove delivery partner from order
+  const { data, error } = await supabaseDB
+    .from('orders')
+    .update({ 
+      delivery_partner_id: null,
+      delivery_assigned_at: null,
+      delivery_assignment_type: null
+    })
+    .eq('id', orderId)
+    .select()
+    .single();
+    
+  if (error) {
+    throw new Error(`Failed to remove delivery partner from order: ${error.message}`);
+  }
+  
+  return data;
+}
+
+// Get delivery partner workload/stats
+export async function getDeliveryPartnerStats(deliveryPartnerId: string) {
+  const { data, error } = await supabaseDB
+    .rpc('get_delivery_partner_stats', { partner_id: deliveryPartnerId });
+
+  if (error) {
+    // Fallback to manual calculation if RPC doesn't exist
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    
+    const { data: assignmentsData, error: assignmentsError } = await supabaseDB
+      .from('delivery_assignments')
+      .select('status, assigned_at, completed_at')
+      .eq('delivery_partner_id', deliveryPartnerId)
+      .gte('assigned_at', thirtyDaysAgo);
+      
+    if (assignmentsError) {
+      throw new Error(`Failed to fetch delivery partner stats: ${assignmentsError.message}`);
+    }
+
+    const stats = {
+      total_assignments: assignmentsData.length,
+      active_assignments: assignmentsData.filter(a => ['assigned', 'accepted', 'in_progress'].includes(a.status)).length,
+      completed_assignments: assignmentsData.filter(a => a.status === 'completed').length,
+      cancelled_assignments: assignmentsData.filter(a => a.status === 'cancelled').length,
+      completion_rate: assignmentsData.length > 0 ? 
+        (assignmentsData.filter(a => a.status === 'completed').length / assignmentsData.length * 100).toFixed(2) : 0
+    };
+
+    return stats;
+  }
+
+  return data[0] || {
+    total_assignments: 0,
+    active_assignments: 0,
+    completed_assignments: 0,
+    cancelled_assignments: 0,
+    completion_rate: 0
+  };
+}

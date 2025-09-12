@@ -7,7 +7,7 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY || ''
 );
 
-interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
     role: string;
@@ -176,4 +176,27 @@ export const ownershipMiddleware = (userIdParam: string = 'userId') => {
   };
 
   return middleware;
+};
+export const deliveryPartnerMiddleware = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): void => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+
+    if (req.user.role !== 'delivery_partner') {
+      console.warn('[DeliveryPartnerMiddleware] Access denied. User role:', req.user.role);
+      res.status(403).json({ error: 'Delivery partner access required' });
+      return;
+    }
+
+    next();
+  } catch (error) {
+    console.error('[DeliveryPartnerMiddleware] Error:', error);
+    res.status(500).json({ error: 'Authorization failed' });
+  }
 };

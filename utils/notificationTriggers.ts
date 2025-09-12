@@ -1,9 +1,8 @@
 import { sendBulkNotification, sendNotification } from "../src/services/notificationService";
 
 export class NotificationTriggers {
-  
   // User Registration & KYC Related
-  static async triggerAccountCreated(userId: string, role: 'seller' | 'buyer') {
+  static async triggerAccountCreated(userId: string, role: 'seller' | 'buyer' | 'delivery_partner') {
     console.log(`Triggering account_created notification for user ${userId} with role ${role}`);
     return await sendNotification({
       userId,
@@ -12,7 +11,7 @@ export class NotificationTriggers {
     });
   }
 
-  static async triggerKYCApproved(userId: string, role: 'seller' | 'buyer') {
+  static async triggerKYCApproved(userId: string, role: 'seller' | 'buyer' | 'delivery_partner') {
     console.log(`Triggering kyc_approved notification for user ${userId} with role ${role}`);
     return await sendNotification({
       userId,
@@ -152,11 +151,11 @@ export class NotificationTriggers {
   }
 
   // Admin Specific
-  static async triggerNewUserRegistered(userId: string, role: 'seller' | 'buyer') {
+  static async triggerNewUserRegistered(userId: string, role: 'seller' | 'buyer' | 'delivery_partner') {
     console.log(`Triggering new_user_registered notification for user ${userId} with role ${role}`);
     // This will automatically notify all admins
     return await sendNotification({
-      userId: userId, // This is the new user's ID, admins will be notified automatically
+      userId: userId,
       eventType: 'new_user_registered',
       placeholders: { role }
     });
@@ -181,6 +180,60 @@ export class NotificationTriggers {
     // Admins will be notified automatically
   }
 
+  // Delivery Partner Related
+  static async triggerDeliveryAssigned(deliveryPartnerId: string, orderId: string, productName: string, pickupAddress: string, deliveryAddress: string) {
+    console.log(`Triggering delivery_assigned notification for delivery partner ${deliveryPartnerId} for order ${orderId}`);
+    return await sendNotification({
+      userId: deliveryPartnerId,
+      eventType: 'delivery_assigned',
+      placeholders: { 
+        order_id: orderId,
+        product_name: productName,
+        pickup_address: pickupAddress,
+        delivery_address: deliveryAddress
+      }
+    });
+  }
+
+  static async triggerDeliveryStatusUpdated(deliveryPartnerId: string, orderId: string, status: string, productName: string) {
+    console.log(`Triggering delivery_status_updated notification for delivery partner ${deliveryPartnerId} for order ${orderId} with status ${status}`);
+    return await sendNotification({
+      userId: deliveryPartnerId,
+      eventType: 'delivery_status_updated',
+      placeholders: { 
+        order_id: orderId,
+        status,
+        product_name: productName
+      }
+    });
+  }
+
+  static async triggerDeliveryReassigned(deliveryPartnerId: string, orderId: string, productName: string, reason?: string) {
+    console.log(`Triggering delivery_reassigned notification for delivery partner ${deliveryPartnerId} for order ${orderId}`);
+    return await sendNotification({
+      userId: deliveryPartnerId,
+      eventType: 'delivery_reassigned',
+      placeholders: { 
+        order_id: orderId,
+        product_name: productName,
+        reason: reason || 'No reason provided'
+      }
+    });
+  }
+
+  static async triggerDeliveryAssignmentRemoved(deliveryPartnerId: string, orderId: string, productName: string, reason?: string) {
+    console.log(`Triggering delivery_assignment_removed notification for delivery partner ${deliveryPartnerId} for order ${orderId}`);
+    return await sendNotification({
+      userId: deliveryPartnerId,
+      eventType: 'delivery_assignment_removed',
+      placeholders: { 
+        order_id: orderId,
+        product_name: productName,
+        reason: reason || 'No reason provided'
+      }
+    });
+  }
+
   // Bulk notifications for promotions/offers
   static async triggerOfferActivated(userIds: string[], offerDetails: string) {
     console.log(`Triggering offer_activated bulk notification for ${userIds.length} users`);
@@ -201,11 +254,10 @@ export class NotificationTriggers {
   }
 }
 
-// Example usage in your admin controller:
 export const NotificationHelpers = {
   // When admin updates order status
   async handleOrderStatusUpdate(orderId: string, newStatus: string, orderDetails: any) {
-    const { sellerId, buyerId, productName, amount } = orderDetails;
+    const { sellerId, buyerId, productName, amount, deliveryPartnerId, pickupAddress, deliveryAddress } = orderDetails;
     console.log(`Handling order status update for order ${orderId} to status ${newStatus}`);
 
     switch (newStatus) {
@@ -218,6 +270,15 @@ export const NotificationHelpers = {
           orderDetails.rentalDate,
           orderDetails.deliveryMethod
         );
+        // Notify delivery partner if assigned
+        if (deliveryPartnerId) {
+          await NotificationTriggers.triggerDeliveryStatusUpdated(
+            deliveryPartnerId,
+            orderId,
+            newStatus,
+            productName
+          );
+        }
         break;
 
       case 'returned':
@@ -228,17 +289,33 @@ export const NotificationHelpers = {
           orderId, 
           amount
         );
-        
         await sendNotification({
           userId: buyerId,
           eventType: 'return_received',
           placeholders: { product_name: productName }
         });
+        // Notify delivery partner if assigned
+        if (deliveryPartnerId) {
+          await NotificationTriggers.triggerDeliveryStatusUpdated(
+            deliveryPartnerId,
+            orderId,
+            newStatus,
+            productName
+          );
+        }
         break;
 
       case 'cancelled':
         console.log(`Handling cancellation for order ${orderId}`);
-        // Handle cancellation notifications
+        // Notify delivery partner if assigned
+        if (deliveryPartnerId) {
+          await NotificationTriggers.triggerDeliveryAssignmentRemoved(
+            deliveryPartnerId,
+            orderId,
+            productName,
+            'Order cancelled'
+          );
+        }
         break;
     }
   },
@@ -264,8 +341,86 @@ export const NotificationHelpers = {
   },
 
   // When admin approves KYC
-  async handleKYCApproval(userId: string, role: 'seller' | 'buyer') {
+  async handleKYCApproval(userId: string, role: 'seller' | 'buyer' | 'delivery_partner') {
     console.log(`Handling KYC approval for user ${userId} with role ${role}`);
     await NotificationTriggers.triggerKYCApproved(userId, role);
+  },
+
+  // When admin assigns delivery
+  async handleDeliveryAssignment(orderId: string, deliveryPartnerId: string, orderDetails: any) {
+    const { productName, pickupAddress, deliveryAddress } = orderDetails;
+    console.log(`Handling delivery assignment for order ${orderId} to delivery partner ${deliveryPartnerId}`);
+
+    await NotificationTriggers.triggerDeliveryAssigned(
+      deliveryPartnerId,
+      orderId,
+      productName,
+      pickupAddress,
+      deliveryAddress
+    );
+  },
+
+  // When admin reassigns delivery
+  async handleDeliveryReassignment(orderId: string, oldDeliveryPartnerId: string | null, newDeliveryPartnerId: string, orderDetails: any, reason?: string) {
+    const { productName, pickupAddress, deliveryAddress } = orderDetails;
+    console.log(`Handling delivery reassignment for order ${orderId} to new delivery partner ${newDeliveryPartnerId}`);
+
+    // Notify old delivery partner if exists
+    if (oldDeliveryPartnerId) {
+      await NotificationTriggers.triggerDeliveryAssignmentRemoved(
+        oldDeliveryPartnerId,
+        orderId,
+        productName,
+        reason || 'Reassigned to another delivery partner'
+      );
+    }
+
+    // Notify new delivery partner
+    await NotificationTriggers.triggerDeliveryAssigned(
+      newDeliveryPartnerId,
+      orderId,
+      productName,
+      pickupAddress,
+      deliveryAddress
+    );
+  },
+
+  // When admin removes delivery assignment
+  async handleDeliveryAssignmentRemoval(orderId: string, deliveryPartnerId: string, orderDetails: any, reason?: string) {
+    const { productName } = orderDetails;
+    console.log(`Handling delivery assignment removal for order ${orderId} from delivery partner ${deliveryPartnerId}`);
+
+    await NotificationTriggers.triggerDeliveryAssignmentRemoved(
+      deliveryPartnerId,
+      orderId,
+      productName,
+      reason || 'Assignment removed by admin'
+    );
+  },
+
+  // When delivery partner updates status
+  async handleDeliveryStatusUpdate(assignmentId: string, status: string, deliveryDetails: any) {
+    const { deliveryPartnerId, orderId, productName } = deliveryDetails;
+    console.log(`Handling delivery status update for assignment ${assignmentId} to status ${status}`);
+
+    await NotificationTriggers.triggerDeliveryStatusUpdated(
+      deliveryPartnerId,
+      orderId,
+      status,
+      productName
+    );
+
+    // Notify admins for completion or cancellation
+    if (status === 'completed' || status === 'cancelled') {
+      await sendNotification({
+        userId: deliveryPartnerId, // Admins will be notified automatically
+        eventType: `delivery_${status}`,
+        placeholders: { 
+          order_id: orderId,
+          product_name: productName,
+          status
+        }
+      });
+    }
   }
 };

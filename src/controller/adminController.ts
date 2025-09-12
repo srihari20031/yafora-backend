@@ -567,3 +567,119 @@ export async function deleteReferralReward(req: AuthenticatedRequest, res: Respo
     res.status(500).json({ error: (error as Error).message });
   }
 }
+
+export async function getAllDeliveryPartners(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const deliveryPartners = await AdminService.getAllDeliveryPartners();
+    res.status(200).json(deliveryPartners);
+  } catch (error) {
+    console.error('Error fetching delivery partners:', (error as Error).message);
+    res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+export async function getDeliveryPartnerAssignments(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { deliveryPartnerId } = req.params;
+    const assignments = await AdminService.getDeliveryPartnerAssignments(deliveryPartnerId || undefined);
+    res.status(200).json(assignments);
+  } catch (error) {
+    console.error('Error fetching delivery assignments:', (error as Error).message);
+    res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+export async function getOrdersNeedingDelivery(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const orders = await AdminService.getOrdersNeedingDelivery();
+    res.status(200).json(orders);
+  } catch (error) {
+    console.error('Error fetching orders needing delivery:', (error as Error).message);
+    res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+export async function assignDeliveryPartner(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { orderId, deliveryPartnerId, notes } = req.body;
+    
+    if (!orderId || !deliveryPartnerId) {
+      res.status(400).json({ error: 'Order ID and delivery partner ID are required' });
+      return;
+    }
+
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Admin authentication required' });
+      return;
+    }
+
+    const result = await AdminService.assignDeliveryPartner(orderId, deliveryPartnerId, req.user.id, notes);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error assigning delivery partner:', (error as Error).message);
+    res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+export async function reassignDeliveryPartner(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { orderId } = req.params;
+    const { newDeliveryPartnerId, reason } = req.body;
+    
+    if (!orderId || !newDeliveryPartnerId) {
+      res.status(400).json({ error: 'Order ID and new delivery partner ID are required' });
+      return;
+    }
+
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Admin authentication required' });
+      return;
+    }
+
+    const result = await AdminService.reassignDeliveryPartner(orderId, newDeliveryPartnerId, req.user.id, reason);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error reassigning delivery partner:', (error as Error).message);
+    res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+export async function removeDeliveryAssignment(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { orderId } = req.params;
+    const { reason } = req.body;
+    
+    if (!orderId) {
+      res.status(400).json({ error: 'Order ID is required' });
+      return;
+    }
+
+    if (!req.user?.id) {
+      res.status(401).json({ error: 'Admin authentication required' });
+      return;
+    }
+
+    const result = await AdminService.removeDeliveryAssignment(orderId, req.user.id, reason);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error removing delivery assignment:', (error as Error).message);
+    res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+export async function getDeliveryPartnerStats(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { deliveryPartnerId } = req.params;
+    
+    if (!deliveryPartnerId) {
+      res.status(400).json({ error: 'Delivery partner ID is required' });
+      return;
+    }
+
+    const stats = await AdminService.getDeliveryPartnerStats(deliveryPartnerId);
+    res.status(200).json(stats);
+  } catch (error) {
+    console.error('Error fetching delivery partner stats:', (error as Error).message);
+    res.status(500).json({ error: (error as Error).message });
+  }
+}
