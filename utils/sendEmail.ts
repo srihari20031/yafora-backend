@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY!);
 
 // Use test domain for development, custom domain for production
 const FROM_EMAIL = process.env.NODE_ENV === 'production' 
