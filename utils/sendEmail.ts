@@ -3,16 +3,14 @@ import { Resend } from 'resend';
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
 // Use test domain for development, custom domain for production
-const FROM_EMAIL = process.env.NODE_ENV === 'production' 
-  ? 'Yafora <notifications@yafora.com>' 
-  : 'Yafora <onboarding@resend.dev>'; // Resend's test domain
+const FROM_EMAIL = 'Yafora <notifications@yafora.com>'
 
 export async function sendEmail(to: string, subject: string, body: string): Promise<void> {
   console.log(`📧 Sending email to: ${to}`);
   try {
     const result = await resend.emails.send({
       from: FROM_EMAIL,
-      to: 'narayansrihari207@gmail.com',
+      to: to,
       subject: subject,
       html: convertTextToHtml(body),
     });

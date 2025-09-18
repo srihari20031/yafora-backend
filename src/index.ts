@@ -38,7 +38,8 @@ const getAllowedOrigins = (): string[] => {
   const baseOrigins = [
     'http://localhost:3000', 
     'http://localhost:3001',
-    'https://yafora.vercel.app' // Fallback
+    'https://yafora.vercel.app',
+    'https://shop.yafora.com',
   ];
   
   if (envOrigins) {

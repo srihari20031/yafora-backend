@@ -5,8 +5,8 @@ const resend = new Resend(process.env.RESEND_API_KEY!);
 async function testEmail() {
   try {
     const result = await resend.emails.send({
-      from: 'onboarding@resend.dev',
-      to: 'your-test-email@gmail.com', // Replace with your test email
+      from: 'noreply@yafora.com',
+      to: 'sriharivelayutham.28@gmail.com', // Replace with your test email
       subject: 'Test from Script',
       html: '<p>This is a test email from a standalone script.</p>',
     });
