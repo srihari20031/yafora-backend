@@ -42,7 +42,7 @@ export async function sendHtmlEmail(
   try {
     const result = await resend.emails.send({
       from: FROM_EMAIL,
-      to: 'narayansrihari207@gmail.com',
+      to: to,
       subject: subject,
       html: htmlContent,
       text: textContent, // Optional plain text fallback
@@ -60,14 +60,14 @@ export async function sendTemplatedEmail(
   to: string,
   subject: string,
   body: string,
-  templateType: 'kyc' | 'product' | 'rental' | 'admin' = 'product'
+  templateType: 'kyc' | 'product' | 'rental' | 'delivery' | 'admin' = 'product' 
 ): Promise<void> {
   const htmlContent = generateEmailTemplate(body, templateType);
   
   try {
     const result = await resend.emails.send({
       from: FROM_EMAIL,
-      to: 'narayansrihari207@gmail.com',
+      to: to,
       subject: subject,
       html: htmlContent,
     });
