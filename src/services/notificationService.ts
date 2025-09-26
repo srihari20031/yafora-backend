@@ -1,5 +1,5 @@
 import supabaseDB from '../../config/connectDB';
-import { sendTemplatedEmail } from '../../utils/sendEmail'; // Updated import
+import { sendTemplatedEmail } from '../../utils/sendEmail';
 
 interface Profile {
   id: string;
@@ -58,16 +58,15 @@ const notificationTemplates: Record<string, Record<string, NotificationTemplate>
       whatsapp: 'Yafora: Hello {{full_name}}, A buyer has requested to rent your product {{product_name}}. Please respond promptly to ensure smooth coordination. Thank you – Team Yafora',
       email: {
         subject: 'You\'ve Got a Booking!',
-        body: 'Hello {{full_name}},\n\nGreat news! Your product, "{{product_name}}", has been rented by a customer. Please prepare it for dispatch.\n\n📅 Rental Date: {{rental_date}}\n📍 Pickup/Delivery Method: {{delivery_method}}\n\nKeep up the great listings!\n\nCheers,\nThe Yafora Team'
+        body: 'Hello {{full_name}},\n\nGreat news! Your product, "{{product_name}}", has been rented by a customer. Please prepare it for dispatch.\n\n📅 Rental Date: {{rental_start_date}} to {{rental_end_date}}\n📍 Pickup/Delivery Method: {{delivery_method}}\n💰 Total Amount: ₹{{total_amount}}\n👤 Customer: {{customer_name}}\n📞 Customer Contact: {{customer_phone}}\n\nKeep up the great listings!\n\nCheers,\nThe Yafora Team'
       }
     },
-    // NEW: Product picked up from seller
     product_picked_up: {
       inApp: 'Your product {{product_name}} has been picked up by our delivery partner.',
       whatsapp: 'Yafora: Hello {{full_name}}, Your product {{product_name}} has been successfully picked up by our delivery partner {{partner_name}}. It\'s now on its way to the customer. Thank you for your cooperation! – Team Yafora',
       email: {
         subject: 'Product Picked Up - {{product_name}}',
-        body: 'Dear {{full_name}},\n\nYour product "{{product_name}}" has been successfully picked up by our delivery partner {{partner_name}}.\n\n📦 Order Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Customer: {{customer_name}}\n- Pickup Time: {{pickup_time}}\n- Delivery Partner: {{partner_name}}\n\nThe item is now on its way to the customer. You can track the delivery status in your dashboard.\n\nThank you for your prompt cooperation!\n\nBest regards,\nTeam Yafora'
+        body: 'Dear {{full_name}},\n\nYour product "{{product_name}}" has been successfully picked up by our delivery partner {{partner_name}}.\n\n📦 Order Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Customer: {{customer_name}}\n- Customer Phone: {{customer_phone}}\n- Pickup Time: {{pickup_time}}\n- Delivery Partner: {{partner_name}}\n- Partner Phone: {{partner_phone}}\n- Delivery Address: {{delivery_address}}\n\nThe item is now on its way to the customer. You can track the delivery status in your dashboard.\n\nThank you for your prompt cooperation!\n\nBest regards,\nTeam Yafora'
       }
     },
     product_delivered: {
@@ -75,19 +74,19 @@ const notificationTemplates: Record<string, Record<string, NotificationTemplate>
       whatsapp: 'Yafora: Hello {{full_name}}, Your product {{product_name}} has been successfully delivered to {{customer_name}}. The rental period has begun. Thank you! – Team Yafora',
       email: {
         subject: 'Product Delivered Successfully - {{product_name}}',
-        body: 'Dear {{full_name}},\n\nGreat news! Your product "{{product_name}}" has been successfully delivered to the customer.\n\n📦 Delivery Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Customer: {{customer_name}}\n- Delivered At: {{delivery_time}}\n- Rental Period: {{rental_start_date}} to {{rental_end_date}}\n\nThe rental period has officially begun. You can expect the product to be returned after the rental period ends.\n\nThank you for being a valued partner!\n\nBest regards,\nTeam Yafora'
+        body: 'Dear {{full_name}},\n\nGreat news! Your product "{{product_name}}" has been successfully delivered to the customer.\n\n📦 Delivery Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Customer: {{customer_name}}\n- Customer Phone: {{customer_phone}}\n- Delivered At: {{delivery_time}}\n- Delivered By: {{partner_name}}\n- Partner Phone: {{partner_phone}}\n- Rental Period: {{rental_start_date}} to {{rental_end_date}}\n- Expected Return: {{return_date}}\n\nThe rental period has officially begun. You can expect the product to be returned after the rental period ends.\n\nThank you for being a valued partner!\n\nBest regards,\nTeam Yafora'
       }
     },
     product_returned: {
       inApp: 'Your product {{product_name}} has been returned successfully.',
       email: {
         subject: 'Return Verified – Payment on the Way',
-        body: 'Hi {{full_name}},\n\nThe returned product for Order #{{order_id}} has been successfully verified.\n\n💰 Your payout of ₹{{amount}} will be processed and credited to your account within 2 working days.\n\nThanks for being a valued partner.\n\nRegards,\nTeam Yafora'
+        body: 'Hi {{full_name}},\n\nThe returned product for Order #{{order_id}} has been successfully verified.\n\n💰 Your payout of ₹{{payout_amount}} will be processed and credited to your account within 2 working days.\n\n📋 Order Summary:\n- Product: {{product_name}}\n- Rental Period: {{rental_start_date}} to {{rental_end_date}}\n- Customer: {{customer_name}}\n- Return Date: {{actual_return_date}}\n\nThanks for being a valued partner.\n\nRegards,\nTeam Yafora'
       }
     },
     late_return: {
       inApp: 'Buyer has delayed return of {{product_name}}. Late fee applicable.',
-      whatsapp: 'Yafora: Hello {{full_name}}, Please be informed that {{buyer_name}} has not returned the item {{product_name}} on time. A late fee is applicable as per policy. We\'ll keep you updated. Stay assured – Team Yafora'
+      whatsapp: 'Yafora: Hello {{full_name}}, Please be informed that {{customer_name}} has not returned the item {{product_name}} on time. A late fee is applicable as per policy. We\'ll keep you updated. Stay assured – Team Yafora'
     },
     damage_reported: {
       inApp: 'A damage claim has been raised for {{product_name}}. Admin review in progress.'
@@ -96,7 +95,7 @@ const notificationTemplates: Record<string, Record<string, NotificationTemplate>
       inApp: 'Security deposit refunded to buyer.',
       email: {
         subject: 'Buyer Refund Processed for {{product_name}}',
-        body: 'Dear {{full_name}},\n\nThe security deposit collected for {{product_name}} has been refunded to the buyer. No damage or late issues were found.\n\nThank you for your service.\nTeam Yafora'
+        body: 'Dear {{full_name}},\n\nThe security deposit collected for {{product_name}} has been refunded to the buyer. No damage or late issues were found.\n\n📋 Refund Details:\n- Order ID: #{{order_id}}\n- Customer: {{customer_name}}\n- Refund Amount: ₹{{refund_amount}}\n- Product: {{product_name}}\n\nThank you for your service.\nTeam Yafora'
       }
     },
     offer_activated: {
@@ -106,8 +105,8 @@ const notificationTemplates: Record<string, Record<string, NotificationTemplate>
       inApp: 'You received a review for {{product_name}}. Check it now!'
     },
     payout_sent: {
-      inApp: 'Payout of ₹{{amount}} for {{product_name}} has been credited to your account.',
-      whatsapp: 'Yafora: Hello {{full_name}}, Your rental earnings of ₹{{amount}} for {{product_name}} have been credited. Keep sharing elegance, keep earning! Thank you – Team Yafora'
+      inApp: 'Payout of ₹{{payout_amount}} for {{product_name}} has been credited to your account.',
+      whatsapp: 'Yafora: Hello {{full_name}}, Your rental earnings of ₹{{payout_amount}} for {{product_name}} have been credited. Keep sharing elegance, keep earning! Thank you – Team Yafora'
     }
   },
   buyer: {
@@ -131,16 +130,15 @@ const notificationTemplates: Record<string, Record<string, NotificationTemplate>
       whatsapp: 'Yafora: Hello {{full_name}}, Your rental for {{product_name}} is confirmed. Kindly ensure pickup/delivery readiness. Shine on – Team Yafora ✨',
       email: {
         subject: 'Your Rental is Confirmed!',
-        body: 'Hi {{full_name}},\n\nYour rental for "{{product_name}}" has been confirmed!\n\n📅 Rental Period: {{rental_period}}\n📍 Pickup Location: {{pickup_location}}\n\nWe hope you shine in your special moment.\n\nWith love,\nYafora Team'
+        body: 'Hi {{full_name}},\n\nYour rental for "{{product_name}}" has been confirmed!\n\n📅 Rental Period: {{rental_start_date}} to {{rental_end_date}}\n📍 Delivery Address: {{delivery_address}}\n💰 Total Amount: ₹{{total_amount}}\n🔒 Security Deposit: ₹{{security_deposit}}\n👤 Seller: {{seller_name}}\n📞 Seller Contact: {{seller_phone}}\n\nWe hope you shine in your special moment.\n\nWith love,\nYafora Team'
       }
     },
-    // NEW: Product out for delivery
     product_out_for_delivery: {
       inApp: 'Your rental item {{product_name}} is out for delivery.',
       whatsapp: 'Yafora: Hello {{full_name}}, Your rental item {{product_name}} is now out for delivery! Our delivery partner {{partner_name}} will contact you shortly. Please be available at the delivery address. – Team Yafora',
       email: {
         subject: 'Your Rental is Out for Delivery - {{product_name}}',
-        body: 'Hi {{full_name}},\n\nGreat news! Your rental item "{{product_name}}" is now out for delivery.\n\n🚚 Delivery Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Delivery Partner: {{partner_name}}\n- Partner Contact: {{partner_phone}}\n- Expected Delivery: {{expected_delivery_time}}\n- Delivery Address: {{delivery_address}}\n\nPlease ensure someone is available at the delivery address. Our delivery partner will contact you before arrival.\n\nGet ready to shine!\n\nBest regards,\nYafora Team'
+        body: 'Hi {{full_name}},\n\nGreat news! Your rental item "{{product_name}}" is now out for delivery.\n\n🚚 Delivery Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Delivery Partner: {{partner_name}}\n- Partner Contact: {{partner_phone}}\n- Expected Delivery: {{expected_delivery_time}}\n- Delivery Address: {{delivery_address}}\n- Seller: {{seller_name}}\n- Seller Contact: {{seller_phone}}\n\nPlease ensure someone is available at the delivery address. Our delivery partner will contact you before arrival.\n\nGet ready to shine!\n\nBest regards,\nYafora Team'
       }
     },
     product_delivered: {
@@ -148,26 +146,26 @@ const notificationTemplates: Record<string, Record<string, NotificationTemplate>
       whatsapp: 'Yafora: Hello {{full_name}}, Your rental item {{product_name}} has been delivered successfully! Enjoy your special moments. Please remember to return it by {{return_date}}. Shine bright! ✨ – Team Yafora',
       email: {
         subject: 'Delivery Confirmed - Enjoy Your Rental!',
-        body: 'Hi {{full_name}},\n\nYour rental item "{{product_name}}" has been successfully delivered!\n\n✨ Rental Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Rental Period: {{rental_start_date}} to {{rental_end_date}}\n- Return Date: {{return_date}}\n\n📋 Important Reminders:\n• Please take good care of the item during your rental period\n• Return the item in the same condition you received it\n• Late returns will incur additional charges\n• Contact us immediately if you notice any issues\n\nEnjoy your special moments and shine bright!\n\nWith love,\nYafora Team'
+        body: 'Hi {{full_name}},\n\nYour rental item "{{product_name}}" has been successfully delivered!\n\n✨ Rental Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Seller: {{seller_name}}\n- Seller Contact: {{seller_phone}}\n- Rental Period: {{rental_start_date}} to {{rental_end_date}}\n- Return Date: {{return_date}}\n- Delivered By: {{partner_name}}\n- Partner Contact: {{partner_phone}}\n\n📋 Important Reminders:\n• Please take good care of the item during your rental period\n• Return the item in the same condition you received it\n• Late returns will incur additional charges\n• Contact us immediately if you notice any issues\n\nEnjoy your special moments and shine bright!\n\nWith love,\nYafora Team'
       }
     },
     product_ready: {
       inApp: 'Your item {{product_name}} is ready for pickup/delivery.'
     },
     return_reminder: {
-      inApp: 'Reminder: Return {{product_name}} by {{date}} to avoid late fees.',
+      inApp: 'Reminder: Return {{product_name}} by {{return_date}} to avoid late fees.',
       whatsapp: 'Yafora: Hello {{full_name}}, Gentle reminder to return {{product_name}} by {{return_date}} to avoid late fees. Thank you for your cooperation! – Team Yafora',
       email: {
         subject: 'Return Reminder - {{product_name}}',
-        body: 'Hi {{full_name}},\n\nThis is a friendly reminder that your rental period for "{{product_name}}" is ending soon.\n\n📅 Return Date: {{return_date}}\n📍 Return Address: {{return_address}}\n\nPlease ensure the item is returned on time to avoid any late fees.\n\nThank you!\nYafora Team'
+        body: 'Hi {{full_name}},\n\nThis is a friendly reminder that your rental period for "{{product_name}}" is ending soon.\n\n📅 Return Date: {{return_date}}\n📍 Return Address: {{pickup_address}}\n👤 Seller: {{seller_name}}\n📞 Seller Contact: {{seller_phone}}\n💰 Late Fee (if delayed): ₹{{late_fee_per_day}} per day\n\nPlease ensure the item is returned on time to avoid any late fees.\n\nThank you!\nYafora Team'
       }
     },
     return_received: {
       inApp: 'Thank you for returning {{product_name}}!'
     },
     late_fee_applied: {
-      inApp: 'A late fee of ₹{{amount}} has been added for {{product_name}}.',
-      whatsapp: 'Yafora: Hello {{full_name}}, This is a gentle reminder that your return for {{product_name}} was delayed. As per policy, a late fee of ₹{{amount}} is applicable. We understand life happens, and we appreciate your cooperation. Thank you – Team Yafora'
+      inApp: 'A late fee of ₹{{late_fee_amount}} has been added for {{product_name}}.',
+      whatsapp: 'Yafora: Hello {{full_name}}, This is a gentle reminder that your return for {{product_name}} was delayed. As per policy, a late fee of ₹{{late_fee_amount}} is applicable. We understand life happens, and we appreciate your cooperation. Thank you – Team Yafora'
     },
     damage_claim: {
       inApp: 'Seller has raised a damage claim for {{product_name}}. Review in progress.'
@@ -198,25 +196,23 @@ const notificationTemplates: Record<string, Record<string, NotificationTemplate>
       inApp: 'KYC for {{full_name}} has been rejected.'
     },
     product_listed: {
-      inApp: '{{full_name}} listed {{product_name}}. Pending moderation.'
+      inApp: '{{seller_name}} listed {{product_name}}. Pending moderation.'
     },
     rental_order_placed: {
-      inApp: 'Rental order placed: {{product_name}} by {{buyer_name}}.'
+      inApp: 'Rental order placed: {{product_name}} by {{customer_name}}.'
     },
-    // NEW: Product pickup completed notification for admin
     product_picked_up: {
       inApp: 'Product {{product_name}} picked up by delivery partner {{partner_name}} for Order #{{order_id}}.',
       email: {
         subject: 'Pickup Completed - Order #{{order_id}}',
-        body: 'Hello Admin,\n\nThe pickup has been successfully completed for the following order:\n\n📦 Order Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Seller: {{seller_name}}\n- Buyer: {{customer_name}}\n- Delivery Partner: {{partner_name}}\n- Pickup Time: {{pickup_time}}\n\nThe item is now in transit to the customer. Next status expected: Delivery completion.\n\nSystem Update,\nYafora Operations'
+        body: 'Hello Admin,\n\nThe pickup has been successfully completed for the following order:\n\n📦 Order Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Seller: {{seller_name}} ({{seller_phone}})\n- Buyer: {{customer_name}} ({{customer_phone}})\n- Delivery Partner: {{partner_name}} ({{partner_phone}})\n- Pickup Time: {{pickup_time}}\n- Delivery Address: {{delivery_address}}\n\nThe item is now in transit to the customer. Next status expected: Delivery completion.\n\nSystem Update,\nYafora Operations'
       }
     },
-    // NEW: Product delivery completed notification for admin
     product_delivered: {
       inApp: 'Product {{product_name}} delivered to {{customer_name}} for Order #{{order_id}}.',
       email: {
         subject: 'Delivery Completed - Order #{{order_id}}',
-        body: 'Hello Admin,\n\nThe delivery has been successfully completed for the following order:\n\n📦 Delivery Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Seller: {{seller_name}}\n- Customer: {{customer_name}}\n- Delivery Partner: {{partner_name}}\n- Delivery Time: {{delivery_time}}\n- Rental Period: {{rental_start_date}} to {{rental_end_date}}\n\nThe rental period has officially begun. The system will automatically send return reminders as the return date approaches.\n\nSystem Update,\nYafora Operations'
+        body: 'Hello Admin,\n\nThe delivery has been successfully completed for the following order:\n\n📦 Delivery Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Seller: {{seller_name}} ({{seller_phone}})\n- Customer: {{customer_name}} ({{customer_phone}})\n- Delivery Partner: {{partner_name}} ({{partner_phone}})\n- Delivery Time: {{delivery_time}}\n- Rental Period: {{rental_start_date}} to {{rental_end_date}}\n- Expected Return: {{return_date}}\n- Total Amount: ₹{{total_amount}}\n- Security Deposit: ₹{{security_deposit}}\n\nThe rental period has officially begun. The system will automatically send return reminders as the return date approaches.\n\nSystem Update,\nYafora Operations'
       }
     },
     product_returned_damaged: {
@@ -227,27 +223,27 @@ const notificationTemplates: Record<string, Record<string, NotificationTemplate>
       }
     },
     late_return: {
-      inApp: 'Late return for {{product_name}} by {{buyer_name}}. Apply penalty.',
+      inApp: 'Late return for {{product_name}} by {{customer_name}}. Apply penalty.',
       email: {
         subject: 'Alert: Rental Order #{{order_id}} Flagged',
         body: 'Hello Admin,\n\nThe rental order #{{order_id}} has been marked as Late/Damaged by the return team.\n\nPlease initiate further action such as late fees, damage charges, or dispute resolution.\n\n🚨 Immediate attention required.\n\nSystem Notification\nYafora Ops Team'
       }
     },
     refund_payout_released: {
-      inApp: 'Refund of ₹{{amount}} sent to {{buyer_name}}. Payout to {{seller_name}} approved.'
+      inApp: 'Refund of ₹{{refund_amount}} sent to {{customer_name}}. Payout to {{seller_name}} approved.'
     },
     delivery_partner_assigned: {
       inApp: 'Order #{{order_id}} has been assigned to delivery partner {{partner_name}}.',
       email: {
         subject: 'Delivery Partner Assigned - Order #{{order_id}}',
-        body: 'Hello Admin,\n\nOrder #{{order_id}} for {{product_name}} has been assigned to delivery partner {{partner_name}}.\n\n📦 Order Details:\n- Product: {{product_name}}\n- Buyer: {{buyer_name}}\n- Seller: {{seller_name}}\n- Partner: {{partner_name}}\n- Partner Contact: {{partner_phone}}\n\nThe delivery partner has been notified and will begin the pickup/delivery process.\n\nBest regards,\nYafora System'
+        body: 'Hello Admin,\n\nOrder #{{order_id}} for {{product_name}} has been assigned to delivery partner {{partner_name}}.\n\n📦 Order Details:\n- Product: {{product_name}}\n- Buyer: {{customer_name}} ({{customer_phone}})\n- Seller: {{seller_name}} ({{seller_phone}})\n- Partner: {{partner_name}} ({{partner_phone}})\n- Pickup Address: {{pickup_address}}\n- Delivery Address: {{delivery_address}}\n- Rental Period: {{rental_start_date}} to {{rental_end_date}}\n\nThe delivery partner has been notified and will begin the pickup/delivery process.\n\nBest regards,\nYafora System'
       }
     },
     delivery_status_updated: {
       inApp: 'Delivery status updated for Order #{{order_id}}: {{status}}',
       email: {
         subject: 'Delivery Status Update - Order #{{order_id}}',
-        body: 'Hello Admin,\n\nThe delivery status for Order #{{order_id}} has been updated.\n\n📋 Status Update:\n- Order ID: {{order_id}}\n- Product: {{product_name}}\n- New Status: {{status}}\n- Partner: {{partner_name}}\n- Updated At: {{updated_at}}\n\nPlease monitor the progress as needed.\n\nBest regards,\nYafora System'
+        body: 'Hello Admin,\n\nThe delivery status for Order #{{order_id}} has been updated.\n\n📋 Status Update:\n- Order ID: {{order_id}}\n- Product: {{product_name}}\n- New Status: {{status}}\n- Partner: {{partner_name}} ({{partner_phone}})\n- Timestamp: {{updated_at}}\n\nPlease monitor the progress as needed.\n\nBest regards,\nYafora System'
       }
     }
   },
@@ -273,7 +269,7 @@ const notificationTemplates: Record<string, Record<string, NotificationTemplate>
       whatsapp: 'Yafora: Hello {{full_name}}, You have been assigned a new delivery task for Order #{{order_id}}. Please check your dashboard for details. Thank you – Team Yafora 🚚',
       email: {
         subject: 'New Delivery Assignment - Order #{{order_id}}',
-        body: 'Hello {{full_name}},\n\nYou have been assigned a new delivery task:\n\n📦 Order Details:\n- Order ID: {{order_id}}\n- Product: {{product_name}}\n- Pickup Address: {{pickup_address}}\n- Delivery Address: {{delivery_address}}\n- Buyer Contact: {{buyer_phone}}\n- Seller Contact: {{seller_phone}}\n- Scheduled Date: {{scheduled_date}}\n\nPlease confirm acceptance and coordinate with both parties for smooth pickup and delivery.\n\nBest regards,\nYafora Operations Team'
+        body: 'Hello {{full_name}},\n\nYou have been assigned a new delivery task:\n\n📦 Order Details:\n- Order ID: {{order_id}}\n- Product: {{product_name}}\n- Pickup Address: {{pickup_address}}\n- Delivery Address: {{delivery_address}}\n- Buyer: {{customer_name}}\n- Buyer Contact: {{customer_phone}}\n- Seller: {{seller_name}}\n- Seller Contact: {{seller_phone}}\n- Scheduled Date: {{scheduled_date}}\n- Rental Period: {{rental_start_date}} to {{rental_end_date}}\n\nPlease confirm acceptance and coordinate with both parties for smooth pickup and delivery.\n\nBest regards,\nYafora Operations Team'
       }
     },
     delivery_status_updated: {
@@ -281,25 +277,120 @@ const notificationTemplates: Record<string, Record<string, NotificationTemplate>
       whatsapp: 'Yafora: Hello {{full_name}}, The status for Order #{{order_id}} has been updated to {{status}}. Thank you for the update! – Team Yafora',
       email: {
         subject: 'Delivery Status Confirmed - Order #{{order_id}}',
-        body: 'Hello {{full_name}},\n\nThank you for updating the delivery status for Order #{{order_id}}.\n\n📋 Status Update:\n- Order ID: {{order_id}}\n- Product: {{product_name}}\n- Status: {{status}}\n- Updated At: {{updated_at}}\n\nIf this is a delivery completion, great job! If you encountered any issues, please contact support.\n\nBest regards,\nYafora Operations Team'
+        body: 'Hello {{full_name}},\n\nThank you for updating the delivery status for Order #{{order_id}}.\n\n📋 Status Update:\n- Order ID: {{order_id}}\n- Product: {{product_name}}\n- Status: {{status}}\n- Updated At: {{updated_at}}\n- Customer: {{customer_name}}\n- Seller: {{seller_name}}\n\nIf this is a delivery completion, great job! If you encountered any issues, please contact support.\n\nBest regards,\nYafora Operations Team'
       }
     },
     payment_processed: {
-      inApp: 'Payment of ₹{{amount}} for deliveries has been processed.',
-      whatsapp: 'Yafora: Hello {{full_name}}, Your delivery payment of ₹{{amount}} has been processed and will be credited soon. Thank you for your service! 🚚💰 – Team Yafora'
+      inApp: 'Payment of ₹{{payment_amount}} for deliveries has been processed.',
+      whatsapp: 'Yafora: Hello {{full_name}}, Your delivery payment of ₹{{payment_amount}} has been processed and will be credited soon. Thank you for your service! 🚚💰 – Team Yafora'
     }
   }
 };
 
+// Helper function to fetch complete order data
+async function fetchCompleteOrderData(orderId: string) {
+  const { data: order, error: orderError } = await supabaseDB
+    .from('orders')
+    .select(`
+      id,
+      total_amount,
+      security_deposit,
+      rental_start_date,
+      rental_end_date,
+      expected_return_date,
+      actual_return_date,
+      pickup_address,
+      delivery_address,
+      late_fee,
+      damage_fee,
+      security_deposit_refunded_amount,
+      delivery_status,
+      order_status,
+      buyer_id,
+      seller_id,
+      product_id,
+      delivery_partner_id
+    `)
+    .eq('id', orderId)
+    .single();
+
+  if (orderError || !order) {
+    throw new Error(`Failed to fetch order: ${orderError?.message || 'Order not found'}`);
+  }
+
+  return order;
+}
+
+// Helper function to fetch user profile with all necessary fields
+async function fetchUserProfile(userId: string) {
+  const { data: profile, error: profileError } = await supabaseDB
+    .from('profiles')
+    .select('id, full_name, email, phone_number, role')
+    .eq('id', userId)
+    .single();
+
+  if (profileError || !profile) {
+    throw new Error(`Failed to fetch profile: ${profileError?.message || 'Profile not found'}`);
+  }
+
+  return profile;
+}
+
+// Helper function to fetch product details
+async function fetchProductDetails(productId: string) {
+  const { data: product, error: productError } = await supabaseDB
+    .from('products')
+    .select('id, title, category, rental_price_per_day, security_deposit_percentage')
+    .eq('id', productId)
+    .single();
+
+  if (productError || !product) {
+    throw new Error(`Failed to fetch product: ${productError?.message || 'Product not found'}`);
+  }
+
+  return product;
+}
+
+// Helper function to format address
+function formatAddress(address: any): string {
+  if (!address) return 'Address not provided';
+  
+  if (typeof address === 'string') return address;
+  
+  if (typeof address === 'object') {
+    const parts = [];
+    if (address.street) parts.push(address.street);
+    if (address.city) parts.push(address.city);
+    if (address.state) parts.push(address.state);
+    if (address.pincode) parts.push(address.pincode);
+    return parts.join(', ') || 'Address not properly formatted';
+  }
+  
+  return 'Address not available';
+}
+
+// Helper function to format date
+function formatDate(dateString: string): string {
+  if (!dateString) return 'Date not available';
+  try {
+    return new Date(dateString).toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  } catch {
+    return dateString;
+  }
+}
+
 function replacePlaceholders(template: string, placeholders: Record<string, string> = {}): string {
   let result = template;
   for (const [key, value] of Object.entries(placeholders)) {
-    result = result.replace(new RegExp(`{{${key}}}`, 'g'), value);
+    result = result.replace(new RegExp(`{{${key}}}`, 'g'), value || '');
   }
   return result;
 }
 
-// Helper function to determine email template type based on event
 function getEmailTemplateType(eventType: string, role: string): 'kyc' | 'product' | 'rental' | 'admin' | 'delivery' {
   if (role === 'admin') return 'admin';
   if (role === 'delivery_partner') return 'delivery';
@@ -326,6 +417,133 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
   const { full_name, email, phone_number, whatsapp_notifications, email_notifications, role } = profile as Profile;
   console.log(`👤 User found: ${full_name} (${email}) - Role: ${role}, Email notifications: ${email_notifications}`);
 
+  // Enhanced placeholder building with complete data fetching
+  let updatedPlaceholders: Record<string, string> = { ...placeholders, full_name };
+
+  // If order_id is provided, fetch complete order data and related profiles
+  if (placeholders.order_id) {
+    try {
+      const order = await fetchCompleteOrderData(placeholders.order_id);
+      
+      // Fetch buyer, seller, and product details
+      const [buyer, seller, product] = await Promise.all([
+        fetchUserProfile(order.buyer_id),
+        fetchUserProfile(order.seller_id),
+        fetchProductDetails(order.product_id)
+      ]);
+
+      // Fetch delivery partner if assigned
+      let deliveryPartner = null;
+      if (order.delivery_partner_id) {
+        deliveryPartner = await fetchUserProfile(order.delivery_partner_id);
+      }
+
+      // Build comprehensive placeholders
+      updatedPlaceholders = {
+        ...updatedPlaceholders,
+        order_id: order.id,
+        product_name: product.title,
+        product_category: product.category,
+        rental_price_per_day: product.rental_price_per_day.toString(),
+        
+        // Buyer details
+        customer_name: buyer.full_name || 'Customer',
+        customer_phone: buyer.phone_number || 'Not provided',
+        buyer_name: buyer.full_name || 'Buyer',
+        buyer_phone: buyer.phone_number || 'Not provided',
+        
+        // Seller details
+        seller_name: seller.full_name || 'Seller',
+        seller_phone: seller.phone_number || 'Not provided',
+        
+        // Delivery partner details
+        partner_name: deliveryPartner?.full_name || 'Partner not assigned',
+        partner_phone: deliveryPartner?.phone_number || 'Not available',
+        
+        // Order details
+        total_amount: order.total_amount.toString(),
+        security_deposit: order.security_deposit.toString(),
+        rental_start_date: formatDate(order.rental_start_date),
+        rental_end_date: formatDate(order.rental_end_date),
+        return_date: formatDate(order.expected_return_date),
+        expected_return_date: formatDate(order.expected_return_date),
+        actual_return_date: order.actual_return_date ? formatDate(order.actual_return_date) : 'Not returned yet',
+        
+        // Address details
+        pickup_address: formatAddress(order.pickup_address),
+        delivery_address: formatAddress(order.delivery_address),
+        
+        // Fees and amounts
+        late_fee: order.late_fee?.toString() || '0',
+        late_fee_amount: order.late_fee?.toString() || '0',
+        damage_fee: order.damage_fee?.toString() || '0',
+        refund_amount: order.security_deposit_refunded_amount?.toString() || '0',
+        
+        // Calculate payout amount (total_amount - platform_commission if applicable)
+        payout_amount: (order.total_amount * 0.85).toString(), // Assuming 15% platform commission
+        
+        // Status and timing
+        delivery_status: order.delivery_status,
+        order_status: order.order_status,
+        pickup_time: new Date().toLocaleString('en-IN'),
+        delivery_time: new Date().toLocaleString('en-IN'),
+        expected_delivery_time: 'within 2-4 hours',
+        updated_at: new Date().toLocaleString('en-IN'),
+        
+        // Additional details
+        delivery_method: 'Door-to-door delivery',
+        late_fee_per_day: '50' // This should be configurable
+      };
+    } catch (error) {
+      console.error(`❌ Failed to fetch order data for order_id ${placeholders.order_id}:`, error);
+    }
+  }
+
+  // If product_id is provided without order_id, fetch basic product details
+  if (placeholders.product_id && !placeholders.order_id) {
+    try {
+      const product = await fetchProductDetails(placeholders.product_id);
+      updatedPlaceholders.product_name = product.title;
+      updatedPlaceholders.product_category = product.category;
+      updatedPlaceholders.rental_price_per_day = product.rental_price_per_day.toString();
+    } catch (error) {
+      console.error(`❌ Failed to fetch product details for product_id ${placeholders.product_id}:`, error);
+    }
+  }
+
+  // If specific user IDs are provided, fetch their details
+  if (placeholders.seller_id && !updatedPlaceholders.seller_name) {
+    try {
+      const seller = await fetchUserProfile(placeholders.seller_id);
+      updatedPlaceholders.seller_name = seller.full_name || 'Seller';
+      updatedPlaceholders.seller_phone = seller.phone_number || 'Not provided';
+    } catch (error) {
+      console.error(`❌ Failed to fetch seller details:`, error);
+    }
+  }
+
+  if (placeholders.buyer_id && !updatedPlaceholders.customer_name) {
+    try {
+      const buyer = await fetchUserProfile(placeholders.buyer_id);
+      updatedPlaceholders.customer_name = buyer.full_name || 'Customer';
+      updatedPlaceholders.customer_phone = buyer.phone_number || 'Not provided';
+      updatedPlaceholders.buyer_name = buyer.full_name || 'Buyer';
+      updatedPlaceholders.buyer_phone = buyer.phone_number || 'Not provided';
+    } catch (error) {
+      console.error(`❌ Failed to fetch buyer details:`, error);
+    }
+  }
+
+  if (placeholders.partner_id && !updatedPlaceholders.partner_name) {
+    try {
+      const partner = await fetchUserProfile(placeholders.partner_id);
+      updatedPlaceholders.partner_name = partner.full_name || 'Delivery Partner';
+      updatedPlaceholders.partner_phone = partner.phone_number || 'Not available';
+    } catch (error) {
+      console.error(`❌ Failed to fetch partner details:`, error);
+    }
+  }
+
   // Get notification template
   const templates = notificationTemplates[role]?.[eventType];
   if (!templates) {
@@ -334,12 +552,12 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
   }
 
   // Prepare messages with placeholders
-  const inAppMessage = replacePlaceholders(templates.inApp, { full_name, ...placeholders });
-  const whatsappMessage = templates.whatsapp ? replacePlaceholders(templates.whatsapp, { full_name, ...placeholders }) : null;
+  const inAppMessage = replacePlaceholders(templates.inApp, updatedPlaceholders);
+  const whatsappMessage = templates.whatsapp ? replacePlaceholders(templates.whatsapp, updatedPlaceholders) : null;
   const emailMessage = templates.email
     ? {
-        subject: replacePlaceholders(templates.email.subject, { full_name, ...placeholders }),
-        body: replacePlaceholders(templates.email.body, { full_name, ...placeholders })
+        subject: replacePlaceholders(templates.email.subject, updatedPlaceholders),
+        body: replacePlaceholders(templates.email.body, updatedPlaceholders)
       }
     : null;
 
@@ -368,14 +586,12 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
     try {
       console.log(`📧 Attempting to send email to ${email} with subject: "${emailMessage.subject}"`);
       
-      // Use the updated sendTemplatedEmail function
       const templateType = getEmailTemplateType(eventType, role);
       await sendTemplatedEmail(email, emailMessage.subject, emailMessage.body, templateType);
       
       console.log(`✅ Email sent successfully to ${email} for event: ${eventType}`);
     } catch (err) {
       console.error(`❌ Failed to send email notification to ${email}:`, err);
-      // Don't throw error - let in-app notification succeed even if email fails
     }
   } else {
     const reasons = [];
@@ -410,9 +626,8 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
         const adminTemplate = notificationTemplates.admin[eventType];
         if (!adminTemplate) continue;
 
-        const adminMessage = replacePlaceholders(adminTemplate.inApp, { full_name, role, ...placeholders });
+        const adminMessage = replacePlaceholders(adminTemplate.inApp, updatedPlaceholders);
 
-        // Insert admin in-app notification
         const { error: adminNotificationError } = await supabaseDB
           .from('notifications')
           .insert({
@@ -429,15 +644,14 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
           console.log(`✅ Admin in-app notification created for ${admin.full_name}`);
         }
 
-        // Send admin email if enabled and template exists
         if (admin.email_notifications && admin.email && adminTemplate.email && !isTesting) {
           try {
             console.log(`📧 Sending admin email to ${admin.email}`);
             
             await sendTemplatedEmail(
               admin.email,
-              replacePlaceholders(adminTemplate.email.subject, { full_name, role, ...placeholders }),
-              replacePlaceholders(adminTemplate.email.body, { full_name, role, ...placeholders }),
+              replacePlaceholders(adminTemplate.email.subject, updatedPlaceholders),
+              replacePlaceholders(adminTemplate.email.body, updatedPlaceholders),
               'admin'
             );
             
@@ -455,43 +669,31 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
   return { message: 'Notifications sent successfully' };
 }
 
-// Helper function to send notifications when delivery partner is assigned
 export async function notifyDeliveryPartnerAssignment(
   orderId: string,
-  partnerId: string,
-  orderDetails: {
-    product_name: string;
-    buyer_name: string;
-    seller_name: string;
-    pickup_address: string;
-    delivery_address: string;
-    buyer_phone?: string;
-    seller_phone?: string;
-    scheduled_date?: string;
-  }
+  partnerId: string
 ): Promise<{ message: string }> {
   console.log(`🚚 Sending delivery partner assignment notifications for order ${orderId}`);
 
-  // Get partner details
-  const { data: partner, error: partnerError } = await supabaseDB
-    .from('profiles')
-    .select('full_name, phone_number')
-    .eq('id', partnerId)
-    .single();
-
-  if (partnerError || !partner) {
-    console.error(`❌ Failed to fetch partner details:`, partnerError?.message);
-    throw new Error(`Failed to fetch partner details: ${partnerError?.message || 'Partner not found'}`);
-  }
-
-  const placeholders = {
-    order_id: orderId,
-    partner_name: partner.full_name,
-    partner_phone: partner.phone_number || '',
-    ...orderDetails
-  };
-
   try {
+    // Fetch complete order data and all related profiles
+    const order = await fetchCompleteOrderData(orderId);
+    const [partner, buyer, seller, product] = await Promise.all([
+      fetchUserProfile(partnerId),
+      fetchUserProfile(order.buyer_id),
+      fetchUserProfile(order.seller_id),
+      fetchProductDetails(order.product_id)
+    ]);
+
+    const placeholders = {
+      order_id: orderId,
+      partner_id: partnerId,
+      product_id: order.product_id,
+      buyer_id: order.buyer_id,
+      seller_id: order.seller_id,
+      scheduled_date: formatDate(order.rental_start_date)
+    };
+
     // Notify delivery partner
     await sendNotification({
       userId: partnerId,
@@ -527,57 +729,34 @@ export async function notifyDeliveryPartnerAssignment(
   }
 }
 
-// NEW: Helper function to handle product pickup notifications
 export async function notifyProductPickup(
   orderId: string,
-  partnerId: string,
-  orderDetails: {
-    product_name: string;
-    seller_id: string;
-    buyer_id: string;
-    seller_name: string;
-    customer_name: string;
-    pickup_time: string;
-  }
+  partnerId: string
 ): Promise<{ message: string }> {
   console.log(`📦 Sending product pickup notifications for order ${orderId}`);
 
-  // Get partner details
-  const { data: partner, error: partnerError } = await supabaseDB
-    .from('profiles')
-    .select('full_name, phone_number')
-    .eq('id', partnerId)
-    .single();
-
-  if (partnerError || !partner) {
-    console.error(`❌ Failed to fetch partner details:`, partnerError?.message);
-    throw new Error(`Failed to fetch partner details: ${partnerError?.message || 'Partner not found'}`);
-  }
-
-  const placeholders = {
-    order_id: orderId,
-    partner_name: partner.full_name,
-    partner_phone: partner.phone_number || '',
-    ...orderDetails
-  };
-
   try {
+    const placeholders = {
+      order_id: orderId,
+      partner_id: partnerId,
+      pickup_time: new Date().toLocaleString('en-IN')
+    };
+
+    // Fetch order to get seller and buyer IDs
+    const order = await fetchCompleteOrderData(orderId);
+
     // Notify seller about pickup
     await sendNotification({
-      userId: orderDetails.seller_id,
+      userId: order.seller_id,
       eventType: 'product_picked_up',
       placeholders
     });
 
     // Notify buyer that product is out for delivery
     await sendNotification({
-      userId: orderDetails.buyer_id,
+      userId: order.buyer_id,
       eventType: 'product_out_for_delivery',
-      placeholders: {
-        ...placeholders,
-        expected_delivery_time: 'within 2-4 hours', // You can calculate this based on distance
-        delivery_address: 'As provided in order' // You can get actual address from order
-      }
+      placeholders
     });
 
     // Notify all admins
@@ -608,54 +787,32 @@ export async function notifyProductPickup(
   }
 }
 
-// NEW: Helper function to handle product delivery notifications
 export async function notifyProductDelivery(
   orderId: string,
-  partnerId: string,
-  orderDetails: {
-    product_name: string;
-    seller_id: string;
-    buyer_id: string;
-    seller_name: string;
-    customer_name: string;
-    delivery_time: string;
-    rental_start_date: string;
-    rental_end_date: string;
-    return_date: string;
-  }
+  partnerId: string
 ): Promise<{ message: string }> {
   console.log(`🚚 Sending product delivery notifications for order ${orderId}`);
 
-  // Get partner details
-  const { data: partner, error: partnerError } = await supabaseDB
-    .from('profiles')
-    .select('full_name, phone_number')
-    .eq('id', partnerId)
-    .single();
-
-  if (partnerError || !partner) {
-    console.error(`❌ Failed to fetch partner details:`, partnerError?.message);
-    throw new Error(`Failed to fetch partner details: ${partnerError?.message || 'Partner not found'}`);
-  }
-
-  const placeholders = {
-    order_id: orderId,
-    partner_name: partner.full_name,
-    partner_phone: partner.phone_number || '',
-    ...orderDetails
-  };
-
   try {
+    const placeholders = {
+      order_id: orderId,
+      partner_id: partnerId,
+      delivery_time: new Date().toLocaleString('en-IN')
+    };
+
+    // Fetch order to get seller and buyer IDs
+    const order = await fetchCompleteOrderData(orderId);
+
     // Notify seller about delivery completion
     await sendNotification({
-      userId: orderDetails.seller_id,
+      userId: order.seller_id,
       eventType: 'product_delivered',
       placeholders
     });
 
     // Notify buyer about successful delivery
     await sendNotification({
-      userId: orderDetails.buyer_id,
+      userId: order.buyer_id,
       eventType: 'product_delivered',
       placeholders
     });
@@ -688,7 +845,6 @@ export async function notifyProductDelivery(
   }
 }
 
-// Helper function to send bulk notifications to multiple users
 export async function sendBulkNotification(
   userIds: string[], 
   eventType: string, 
@@ -716,7 +872,6 @@ export async function sendBulkNotification(
   return { success, failed, errors };
 }
 
-// Helper function to send notifications based on user roles
 export async function sendRoleBasedNotification(
   roles: Array<'seller' | 'buyer' | 'admin' | 'delivery_partner'>,
   eventType: string,
@@ -728,7 +883,6 @@ export async function sendRoleBasedNotification(
     .select('id')
     .in('role', roles);
 
-  // Apply additional filters if provided
   if (additionalFilters) {
     Object.entries(additionalFilters).forEach(([key, value]) => {
       query = query.eq(key, value);
@@ -743,4 +897,77 @@ export async function sendRoleBasedNotification(
 
   const userIds = users?.map(user => user.id) || [];
   return await sendBulkNotification(userIds, eventType, placeholders);
+}
+
+// Utility function to send order-based notifications with automatic data fetching
+export async function sendOrderNotification(
+  orderId: string,
+  eventType: string,
+  additionalPlaceholders: Record<string, string> = {}
+): Promise<{ message: string }> {
+  console.log(`📨 Sending order-based notification for order ${orderId}, event: ${eventType}`);
+
+  try {
+    const order = await fetchCompleteOrderData(orderId);
+    
+    const basePlaceholders = {
+      order_id: orderId,
+      ...additionalPlaceholders
+    };
+
+    // Determine who to notify based on event type
+    const notificationTargets: { userId: string; eventType: string }[] = [];
+
+    switch (eventType) {
+      case 'rental_confirmed':
+      case 'product_ready':
+      case 'return_reminder':
+      case 'late_fee_applied':
+      case 'refund_processed':
+        notificationTargets.push({ userId: order.buyer_id, eventType });
+        break;
+
+      case 'product_booked':
+      case 'product_returned':
+      case 'late_return':
+      case 'security_deposit_refunded':
+      case 'payout_sent':
+        notificationTargets.push({ userId: order.seller_id, eventType });
+        break;
+
+      case 'product_picked_up':
+      case 'product_delivered':
+        // These notify multiple parties
+        if (eventType === 'product_picked_up') {
+          notificationTargets.push(
+            { userId: order.seller_id, eventType: 'product_picked_up' },
+            { userId: order.buyer_id, eventType: 'product_out_for_delivery' }
+          );
+        } else {
+          notificationTargets.push(
+            { userId: order.seller_id, eventType: 'product_delivered' },
+            { userId: order.buyer_id, eventType: 'product_delivered' }
+          );
+        }
+        break;
+
+      default:
+        throw new Error(`Unsupported order event type: ${eventType}`);
+    }
+
+    // Send notifications to all targets
+    for (const target of notificationTargets) {
+      await sendNotification({
+        userId: target.userId,
+        eventType: target.eventType,
+        placeholders: basePlaceholders
+      });
+    }
+
+    console.log(`✅ Order notification sent successfully for ${notificationTargets.length} recipients`);
+    return { message: `Order notifications sent successfully to ${notificationTargets.length} recipients` };
+  } catch (error) {
+    console.error(`❌ Failed to send order notification:`, error);
+    throw error;
+  }
 }

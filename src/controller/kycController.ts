@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 
 import { KYCService } from '../services/kycService';
 import { createMulterInstance } from '../../utils/multerUtils';
+import { sendNotification } from '../services/notificationService'; // Import notification service
 
 // Configure Multer for KYC document uploads
 export const kycUploadMiddleware = createMulterInstance({
@@ -16,8 +17,6 @@ const kycService = new KYCService();
 export async function uploadKYCDocument(req: Request, res: Response): Promise<void> {
   const { userId } = req.params;
   const { document_type } = req.body;
-
-
 
   console.log('[KYCController] uploadKYCDocument called:', {
     userId,
@@ -80,6 +79,7 @@ export async function uploadKYCDocument(req: Request, res: Response): Promise<vo
     res.status(400).json({ error: (error as Error).message });
   }
 }
+
 // Generate upload URL for KYC document
 export async function generateKYCUploadUrl(req: Request, res: Response): Promise<void> {
   const { userId } = req.params;
@@ -143,7 +143,7 @@ export async function generateDocumentViewUrl(req: Request, res: Response): Prom
   }
 }
 
-// Submit KYC for verification
+// Submit KYC for verification - UPDATED with notification
 export async function submitKYCVerification(req: Request, res: Response): Promise<void> {
   const { userId } = req.params;
   const { documentIds } = req.body;
@@ -151,13 +151,36 @@ export async function submitKYCVerification(req: Request, res: Response): Promis
   try {
     const verification = await kycService.submitKYCVerification(userId, documentIds);
     console.log('[KYCController] KYC verification submitted:', verification);
+
+    // Send notification to admins about new KYC submission
+    try {
+      console.log('[KYCController] Sending admin notification for KYC submission');
+      
+      // Get user details for the notification placeholders
+      const userDetails = await kycService.getUserProfile(userId); // Assume this method exists in KYCService
+      
+      await sendNotification({
+        userId: userId, // This will trigger the admin notifications via the notification service
+        eventType: 'new_user_registered', // This will notify admins
+        placeholders: {
+          full_name: userDetails?.full_name || 'Unknown User'
+        }
+      });
+      
+      console.log('[KYCController] Admin notification sent successfully');
+    } catch (notificationError) {
+      console.error('[KYCController] Failed to send admin notification:', notificationError);
+      // Don't fail the main operation if notification fails
+    }
+
     res.status(200).json({ 
       message: 'KYC submitted for verification', 
       verification 
     });
   } catch (error) {
-    console.log('[KYCController] Error in submitKYCVerification:', {
-      error: (error as Error).message,})
+    console.error('[KYCController] Error in submitKYCVerification:', {
+      error: (error as Error).message,
+    });
     res.status(400).json({ error: (error as Error).message });
   }
 }
@@ -201,7 +224,7 @@ export async function getPendingKYCVerifications(req: Request, res: Response): P
   }
 }
 
-// Admin: Review KYC verification
+// Admin: Review KYC verification - UPDATED with notifications
 export async function reviewKYCVerification(req: Request, res: Response): Promise<void> {
   const { verificationId } = req.params;
   const { adminId, decision, notes, documentReviews } = req.body;
@@ -214,11 +237,57 @@ export async function reviewKYCVerification(req: Request, res: Response): Promis
       notes,
       documentReviews
     );
+
+    console.log('[KYCController] KYC verification reviewed:', verification);
+
+    // Send notifications based on the decision
+    try {
+      const userId = verification.userId; // Use correct property name from KYCVerification type
+      
+      if (decision === 'approved') {
+        console.log('[KYCController] Sending KYC approved notifications');
+        
+        // Send notification to the user about KYC approval
+        await sendNotification({
+          userId: userId,
+          eventType: 'kyc_approved',
+          placeholders: {
+            // Add any additional placeholders if needed
+          }
+        });
+
+        // The notification service will automatically handle admin notifications
+        // for kyc_approved event based on the notificationTemplates
+        console.log('[KYCController] KYC approved notifications sent successfully');
+        
+      } else if (decision === 'rejected') {
+        console.log('[KYCController] Sending KYC rejected notifications');
+        
+        // Send notification to the user about KYC rejection
+        await sendNotification({
+          userId: userId,
+          eventType: 'kyc_rejected',
+          placeholders: {
+            rejection_reason: notes || 'Please check your documents and resubmit'
+          }
+        });
+
+        // The notification service will automatically handle admin notifications
+        // for kyc_rejected event based on the notificationTemplates
+        console.log('[KYCController] KYC rejected notifications sent successfully');
+      }
+
+    } catch (notificationError) {
+      console.error('[KYCController] Failed to send KYC review notifications:', notificationError);
+      // Don't fail the main operation if notification fails
+    }
+
     res.status(200).json({ 
       message: 'KYC verification reviewed', 
       verification 
     });
   } catch (error) {
+    console.error('[KYCController] Error in reviewKYCVerification:', error);
     res.status(400).json({ error: (error as Error).message });
   }
 }

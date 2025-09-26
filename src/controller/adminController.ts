@@ -614,6 +614,10 @@ export async function assignDeliveryPartner(req: AuthenticatedRequest, res: Resp
     }
 
     const result = await AdminService.assignDeliveryPartner(orderId, deliveryPartnerId, req.user.id, notes);
+    
+    // Send notification using data from service
+    await NotificationHelpers.handleDeliveryAssignment(orderId, deliveryPartnerId, result.notificationData);
+
     res.status(200).json(result);
   } catch (error) {
     console.error('Error assigning delivery partner:', (error as Error).message);
@@ -637,6 +641,16 @@ export async function reassignDeliveryPartner(req: AuthenticatedRequest, res: Re
     }
 
     const result = await AdminService.reassignDeliveryPartner(orderId, newDeliveryPartnerId, req.user.id, reason);
+    
+    // Send reassignment notification using data from service
+    await NotificationHelpers.handleDeliveryReassignment(
+      orderId, 
+      result.oldDeliveryPartnerId,
+      newDeliveryPartnerId, 
+      result.notificationData, 
+      reason
+    );
+
     res.status(200).json(result);
   } catch (error) {
     console.error('Error reassigning delivery partner:', (error as Error).message);
@@ -660,6 +674,17 @@ export async function removeDeliveryAssignment(req: AuthenticatedRequest, res: R
     }
 
     const result = await AdminService.removeDeliveryAssignment(orderId, req.user.id, reason);
+    
+    // Send removal notification using data from service
+    if (result.removedDeliveryPartnerId) {
+      await NotificationHelpers.handleDeliveryAssignmentRemoval(
+        orderId,
+        result.removedDeliveryPartnerId,
+        result.notificationData,
+        reason
+      );
+    }
+
     res.status(200).json(result);
   } catch (error) {
     console.error('Error removing delivery assignment:', (error as Error).message);
@@ -681,5 +706,100 @@ export async function getDeliveryPartnerStats(req: AuthenticatedRequest, res: Re
   } catch (error) {
     console.error('Error fetching delivery partner stats:', (error as Error).message);
     res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+export async function updateUser(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { userId } = req.params;
+    const updateData = req.body;
+
+    // Validate userId
+    if (!userId) {
+      res.status(400).json({ error: 'User ID is required' });
+      return;
+    }
+
+    // Validate update data
+    const allowedFields = [
+      'full_name',
+      'phone_number',
+      'role',
+      'is_kyc_verified',
+      'kyc_status',
+      'whatsapp_notifications',
+      'email_notifications',
+      'profile_picture_url',
+      'pickup_address',
+      'delivery_address'
+    ];
+
+    const filteredData = Object.keys(updateData)
+      .filter(key => allowedFields.includes(key))
+      .reduce((obj: any, key) => {
+        obj[key] = updateData[key];
+        return obj;
+      }, {});
+
+    if (Object.keys(filteredData).length === 0) {
+      res.status(400).json({ error: 'No valid fields provided for update' });
+      return;
+    }
+
+    // Validate role if provided
+    if (filteredData.role && !['buyer', 'seller', 'admin', 'delivery_partner'].includes(filteredData.role)) {
+      res.status(400).json({ error: 'Invalid role provided' });
+      return;
+    }
+
+    // Validate kyc_status if provided
+    if (filteredData.kyc_status && !['not_started', 'pending', 'approved', 'rejected'].includes(filteredData.kyc_status)) {
+      res.status(400).json({ error: 'Invalid KYC status provided' });
+      return;
+    }
+
+    const updatedUser = await AdminService.updateUser(userId, filteredData);
+    
+    res.status(200).json({
+      message: 'User updated successfully',
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('Error updating user:', (error as Error).message);
+    res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+export async function deleteUser(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { userId } = req.params;
+
+    // Validate userId
+    if (!userId) {
+      res.status(400).json({ error: 'User ID is required' });
+      return;
+    }
+
+    // Prevent self-deletion
+    if (req.user?.id === userId) {
+      res.status(403).json({ error: 'Cannot delete your own account' });
+      return;
+    }
+
+    await AdminService.deleteUser(userId);
+    
+    res.status(200).json({
+      message: 'User deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting user:', (error as Error).message);
+    
+    if ((error as Error).message.includes('not found')) {
+      res.status(404).json({ error: 'User not found' });
+    } else if ((error as Error).message.includes('Cannot delete admin')) {
+      res.status(403).json({ error: 'Cannot delete admin users' });
+    } else {
+      res.status(500).json({ error: (error as Error).message });
+    }
   }
 }

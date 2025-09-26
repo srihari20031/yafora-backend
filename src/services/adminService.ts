@@ -1137,7 +1137,7 @@ export async function assignDeliveryPartner(orderId: string, deliveryPartnerId: 
     throw new Error(`Failed to create delivery assignment: ${assignmentError.message}`);
   }
 
-  // Update order with delivery partner
+  // Update order with delivery partner and get all notification data
   const { data: updatedOrder, error: updateError } = await supabaseDB
     .from('orders')
     .update({ 
@@ -1148,12 +1148,10 @@ export async function assignDeliveryPartner(orderId: string, deliveryPartnerId: 
     .eq('id', orderId)
     .select(`
       *,
-      products (title),
-      delivery_partner:profiles!orders_delivery_partner_id_fkey (
-        full_name,
-        email,
-        phone_number
-      )
+      products!inner(title),
+      buyer:profiles!buyer_id(full_name, phone_number),
+      seller:profiles!seller_id(full_name, phone_number),
+      delivery_partner:profiles!delivery_partner_id(full_name, email, phone_number)
     `)
     .single();
     
@@ -1169,12 +1167,33 @@ export async function assignDeliveryPartner(orderId: string, deliveryPartnerId: 
   
   return {
     order: updatedOrder,
-    assignment: assignment
+    assignment: assignment,
+    // Notification data
+    notificationData: {
+      productName: updatedOrder.products.title,
+      pickupAddress: JSON.stringify(updatedOrder.pickup_address),
+      deliveryAddress: JSON.stringify(updatedOrder.delivery_address),
+      buyerName: updatedOrder.buyer?.full_name || 'N/A',
+      sellerName: updatedOrder.seller?.full_name || 'N/A',
+      buyerPhone: updatedOrder.buyer?.phone_number || 'N/A',
+      sellerPhone: updatedOrder.seller?.phone_number || 'N/A',
+      partnerName: updatedOrder.delivery_partner?.full_name || 'N/A',
+      partnerEmail: updatedOrder.delivery_partner?.email || 'N/A',
+      partnerPhone: updatedOrder.delivery_partner?.phone_number || 'N/A'
+    }
   };
 }
 
 // Reassign delivery partner
 export async function reassignDeliveryPartner(orderId: string, newDeliveryPartnerId: string, reassignedBy: string, reason?: string) {
+  // Get current delivery partner before cancelling
+  const { data: currentAssignment } = await supabaseDB
+    .from('delivery_assignments')
+    .select('delivery_partner_id')
+    .eq('order_id', orderId)
+    .in('status', ['assigned', 'accepted'])
+    .single();
+
   // Cancel current assignment
   const { error: cancelError } = await supabaseDB
     .from('delivery_assignments')
@@ -1191,11 +1210,31 @@ export async function reassignDeliveryPartner(orderId: string, newDeliveryPartne
   }
 
   // Create new assignment
-  return await assignDeliveryPartner(orderId, newDeliveryPartnerId, reassignedBy, reason);
+  const result = await assignDeliveryPartner(orderId, newDeliveryPartnerId, reassignedBy, reason);
+  
+  // Return with old delivery partner info for notifications
+  return {
+    ...result,
+    oldDeliveryPartnerId: currentAssignment?.delivery_partner_id || null
+  };
 }
 
 // Remove delivery assignment
 export async function removeDeliveryAssignment(orderId: string, removedBy: string, reason?: string) {
+  // Get current delivery partner and order details before removing
+  const { data: orderDetails, error: fetchError } = await supabaseDB
+    .from('orders')
+    .select(`
+      delivery_partner_id,
+      products!inner(title)
+    `)
+    .eq('id', orderId)
+    .single();
+    
+  if (fetchError || !orderDetails) {
+    throw new Error(`Failed to fetch order details: ${fetchError?.message || 'Order not found'}`);
+  }
+
   // Cancel delivery assignment
   const { error: assignmentError } = await supabaseDB
     .from('delivery_assignments')
@@ -1227,7 +1266,16 @@ export async function removeDeliveryAssignment(orderId: string, removedBy: strin
     throw new Error(`Failed to remove delivery partner from order: ${error.message}`);
   }
   
-  return data;
+  return {
+    order: data,
+    // Notification data
+    removedDeliveryPartnerId: orderDetails.delivery_partner_id,
+ 
+    notificationData: {
+      //@ts-expect-error:src
+      productName: orderDetails.products.title
+    }
+  };
 }
 
 // Get delivery partner workload/stats
@@ -1269,3 +1317,81 @@ export async function getDeliveryPartnerStats(deliveryPartnerId: string) {
     completion_rate: 0
   };
 }
+
+export async function updateUser(userId: string, updateData: Partial<{
+  full_name: string;
+  phone_number: string;
+  role: string;
+  is_kyc_verified: boolean;
+  kyc_status: string;
+  whatsapp_notifications: boolean;
+  email_notifications: boolean;
+  profile_picture_url: string;
+  pickup_address: any;
+  delivery_address: any;
+}>): Promise<any> {
+  try {
+    // Add updated_at timestamp
+    const dataWithTimestamp = {
+      ...updateData,
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabaseDB
+      .from('profiles')
+      .update(dataWithTimestamp)
+      .eq('id', userId)
+      .select('*')
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to update user: ${error.message}`);
+    }
+
+    return data;
+  } catch (error) {
+    throw new Error(`Failed to update user: ${(error as Error).message}`);
+  }
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  try {
+    // First check if user exists
+    const { data: existingUser, error: fetchError } = await supabaseDB
+      .from('profiles')
+      .select('id, email, role')
+      .eq('id', userId)
+      .single();
+
+    if (fetchError) {
+      throw new Error(`User not found: ${fetchError.message}`);
+    }
+
+    // Prevent deletion of admin users (optional safety check)
+    if (existingUser.role === 'admin') {
+      throw new Error('Cannot delete admin users');
+    }
+
+    // Delete from profiles table (this will cascade to auth.users due to foreign key)
+    const { error: deleteError } = await supabaseDB
+      .from('profiles')
+      .delete()
+      .eq('id', userId);
+
+    if (deleteError) {
+      throw new Error(`Failed to delete user: ${deleteError.message}`);
+    }
+
+    // Optionally, you might want to delete from auth.users as well
+    // This depends on your Supabase setup and cascade rules
+    const { error: authDeleteError } = await supabaseDB.auth.admin.deleteUser(userId);
+    
+    if (authDeleteError) {
+      console.warn(`Warning: Failed to delete auth user: ${authDeleteError.message}`);
+      // Don't throw here as the profile deletion was successful
+    }
+  } catch (error) {
+    throw new Error(`Failed to delete user: ${(error as Error).message}`);
+  }
+}
+

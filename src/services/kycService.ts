@@ -199,6 +199,39 @@ export class KYCService {
 
   // Submit KYC for verification
 async submitKYCVerification(userId: string, documentIds: string[]): Promise<KYCVerification> {
+  // First check if there's already a pending/submitted verification
+  const { data: existingVerification, error: existingError } = await supabaseDB
+    .from('kyc_verifications')
+    .select('*')
+    .eq('user_id', userId)
+    .in('status', ['submitted', 'under_review', 'approved'])
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (existingError) {
+    throw new Error(`Failed to check existing verification: ${existingError.message}`);
+  }
+
+  if (existingVerification && existingVerification.length > 0) {
+    const status = existingVerification[0].status;
+    throw new Error(`KYC verification already ${status}. Cannot submit duplicate request.`);
+  }
+
+  // Check current profile KYC status
+  const { data: profile, error: profileError } = await supabaseDB
+    .from('profiles')
+    .select('kyc_status')
+    .eq('id', userId)
+    .single();
+
+  if (profileError) {
+    throw new Error(`Failed to fetch profile: ${profileError.message}`);
+  }
+
+  if (['submitted', 'under_review', 'approved'].includes(profile.kyc_status)) {
+    throw new Error(`KYC status is already ${profile.kyc_status}. Cannot submit new verification.`);
+  }
+
   // Validate all documents are uploaded
   const { data: documents, error: docError } = await supabaseDB
     .from('kyc_documents')
@@ -217,16 +250,18 @@ async submitKYCVerification(userId: string, documentIds: string[]): Promise<KYCV
   const verification = await this.createKYCVerification(userId, documentIds, 'initial');
 
   // Update profiles table with new kyc_status
-  const { error: profileError } = await supabaseDB
+  const { error: profileUpdateError } = await supabaseDB
     .from('profiles')
     .update({
-      kyc_status: 'pending', // Use 'pending' to match CHECK constraint
+      kyc_status: 'submitted', // Changed from 'pending' to 'submitted' to match your flow
       current_kyc_verification_id: verification.id,
       updated_at: new Date().toISOString(),
     })
     .eq('id', userId);
 
-  if (profileError) throw new Error(`Failed to update profile status: ${profileError.message}`);
+  if (profileUpdateError) {
+    throw new Error(`Failed to update profile status: ${profileUpdateError.message}`);
+  }
 
   return verification;
 }
@@ -409,8 +444,21 @@ async submitKYCVerification(userId: string, documentIds: string[]): Promise<KYCV
       kycStatus: profile.kyc_status,
       isKycVerified: profile.is_kyc_verified,
       currentVerification,
-      adminNotes: currentVerification.admin_notes,
+      adminNotes: currentVerification?.admin_notes,
       documents
     };
   }
+
+  async getUserProfile(userId: string) {
+  const { data, error } = await supabaseDB
+    .from('profiles')
+    .select('full_name, email, kyc_status, is_kyc_verified')
+    .eq('id', userId)
+    .single();
+  if (error) {
+    throw new Error(`Failed to fetch user profile: ${error.message}`);
+  }
+  return data;
 }
+}
+

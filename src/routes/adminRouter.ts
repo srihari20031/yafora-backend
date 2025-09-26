@@ -8,6 +8,8 @@ const router = express.Router();
 router.get('/users', authMiddleware, adminMiddleware, AdminController.getAllUsers);
 router.get('/users/:userId', authMiddleware, adminMiddleware, AdminController.getUserById);
 router.patch('/users/:userId/status', authMiddleware, adminMiddleware, AdminController.updateUserStatus);
+router.put('/users/:userId', authMiddleware, adminMiddleware, AdminController.updateUser);
+router.delete('/users/:userId', authMiddleware, adminMiddleware, AdminController.deleteUser);
 
 // Product management routes
 router.get('/products', authMiddleware, adminMiddleware, AdminController.getAllProducts);

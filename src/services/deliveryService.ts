@@ -39,6 +39,8 @@ export async function getAssignedDeliveries(deliveryPartnerId: string) {
     .in('status', ['assigned', 'accepted', 'in_progress'])
     .order('assigned_at', { ascending: false });
 
+    console.log(`Querying assigned deliveries for partner ${deliveryPartnerId}`);
+
   if (error) {
     throw new Error(`Failed to fetch assigned deliveries: ${error.message}`);
   }
@@ -123,13 +125,25 @@ export async function updateDeliveryStatus(
     }
   }
 
-  return data;
+  // Return data with notification info
+  return {
+    assignment: data,
+    notificationData: {
+      orderId: data.orders.id,
+      productName: data.orders.products?.title || 'Unknown Product',
+      deliveryPartnerId: deliveryPartnerId,
+      status: status,
+      buyerName: data.orders.buyer?.full_name || 'N/A',
+      sellerName: data.orders.seller?.full_name || 'N/A'
+    }
+  };
 }
 
 export async function getDeliveryHistory(
   deliveryPartnerId: string,
   statusFilter?: 'assigned' | 'accepted' | 'in_progress' | 'completed' | 'cancelled'
 ) {
+  console.log('getDeliveryHistory called with:', { deliveryPartnerId, statusFilter });
   let query = supabaseDB
     .from('delivery_assignments')
     .select(`
@@ -172,6 +186,7 @@ export async function getDeliveryHistory(
   }
 
   const { data, error } = await query;
+  console.log('getDeliveryHistory query result:', { data, error });
 
   if (error) {
     throw new Error(`Failed to fetch delivery history: ${error.message}`);
