@@ -12,6 +12,7 @@ import reviewRoutes from './routes/reviewRouter';
 import promotionRoutes from './routes/promoCodeAndReferralRouter'
 import adminDashboardRoutes from './routes/adminDashboardRouter';
 import deliveryRotues from './routes/deliveryRouter';
+import searchRoutes from "./routes/searchRouter"
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
@@ -155,6 +156,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/promotions', promotionRoutes)
 app.use('/api/admin-dashboard', adminDashboardRoutes);
 app.use('/api/delivery', deliveryRotues);
+app.use('/api/search', searchRoutes)
 
 app.get('/', (req, res) => {
   res.send('Welcome to the API'); 

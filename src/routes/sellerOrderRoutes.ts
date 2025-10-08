@@ -5,7 +5,8 @@ import {
   refundSecurityDepositController,
   reportSellerOrderDamage,
   cancelSellerOrder,
-  getSellerTotalTransactionsController
+  getSellerTotalTransactionsController,
+  getSellerReviewsList
 } from "../controller/sellerOrderController";
 
 const router = Router();
@@ -16,5 +17,6 @@ router.post('/:orderId/refund-security-deposit', refundSecurityDepositController
 router.post('/:orderId/damage', reportSellerOrderDamage);
 router.delete('/:orderId', cancelSellerOrder);
 router.get('/:sellerId/total-transactions', getSellerTotalTransactionsController);
+router.get('/sellers/:sellerId/reviews', getSellerReviewsList);
 
 export default router;

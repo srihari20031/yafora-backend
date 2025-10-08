@@ -217,3 +217,122 @@ export async function getSellerTotalTransactions(sellerId: string) {
 
   return totals;
 }
+
+export async function getSellerReviews(sellerId: string, page: number = 1, limit: number = 10) {
+  const offset = (page - 1) * limit;
+
+  // First, get all products by this seller
+  const { data: sellerProducts, error: productsError } = await supabaseDB
+    .from('products')
+    .select('id')
+    .eq('seller_id', sellerId);
+
+  if (productsError) {
+    throw new Error(`Failed to fetch seller products: ${productsError.message}`);
+  }
+
+  if (!sellerProducts || sellerProducts.length === 0) {
+    return {
+      products: [],
+      total_reviews: 0,
+      overall_average_rating: 0,
+      page,
+      limit,
+      totalPages: 0
+    };
+  }
+
+  const productIds = sellerProducts.map(p => p.id);
+
+  // Get all reviews for these products with product and buyer details
+  const { data: allReviews, error: reviewsError } = await supabaseDB
+    .from('reviews')
+    .select(`
+      id,
+      rating,
+      comment,
+      created_at,
+      product_id,
+      buyer:profiles!reviews_buyer_id_fkey (
+        id,
+        full_name
+      ),
+      product:products!reviews_product_id_fkey (
+        id,
+        title,
+        images
+      )
+    `)
+    .in('product_id', productIds)
+    .order('created_at', { ascending: false });
+
+  if (reviewsError) {
+    throw new Error(`Failed to fetch reviews: ${reviewsError.message}`);
+  }
+
+  // Group reviews by product
+  const productReviewsMap = new Map();
+  
+  allReviews?.forEach((review: any) => {
+    const productId = review.product_id;
+    
+    if (!productReviewsMap.has(productId)) {
+      productReviewsMap.set(productId, {
+        product_id: review.product.id,
+        product_title: review.product.title,
+        product_images: review.product.images,
+        total_reviews: 0,
+        average_rating: 0,
+        rating_sum: 0,
+        reviews: []
+      });
+    }
+    
+    const productData = productReviewsMap.get(productId);
+    productData.total_reviews += 1;
+    productData.rating_sum += review.rating;
+    productData.reviews.push({
+      id: review.id,
+      rating: review.rating,
+      comment: review.comment,
+      created_at: review.created_at,
+      buyer: {
+        id: review.buyer.id,
+        full_name: review.buyer.full_name
+      }
+    });
+  });
+
+  // Calculate average ratings and limit reviews to 10 per product
+  const productsWithReviews = Array.from(productReviewsMap.values()).map(product => {
+    product.average_rating = product.rating_sum / product.total_reviews;
+    delete product.rating_sum;
+    
+    // Keep only the 10 most recent reviews for each product
+    product.reviews = product.reviews.slice(0, 10);
+    
+    return product;
+  });
+
+  // Sort products by total reviews (most reviewed first)
+  productsWithReviews.sort((a, b) => b.total_reviews - a.total_reviews);
+
+  // Calculate overall statistics
+  const totalReviews = allReviews?.length || 0;
+  const overallAverageRating = totalReviews > 0
+    ? allReviews.reduce((sum: number, review: any) => sum + review.rating, 0) / totalReviews
+    : 0;
+
+  // Paginate products
+  const totalPages = Math.ceil(productsWithReviews.length / limit);
+  const paginatedProducts = productsWithReviews.slice(offset, offset + limit);
+
+  return {
+    products: paginatedProducts,
+    total_reviews: totalReviews,
+    overall_average_rating: overallAverageRating,
+    page,
+    limit,
+    totalPages
+  };
+}

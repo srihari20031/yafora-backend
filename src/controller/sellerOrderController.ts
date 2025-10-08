@@ -5,7 +5,8 @@ import {
   refundSecurityDeposit,
   reportSellerOrderDamage as reportSellerOrderDamageService,
   cancelSellerOrder as cancelSellerOrderService,
-  getSellerTotalTransactions
+  getSellerTotalTransactions,
+  getSellerReviews
 } from '../services/sellerOrderService';
 
 export async function getSellerOrdersList(req: Request, res: Response): Promise<void> {
@@ -91,5 +92,23 @@ export async function getSellerTotalTransactionsController(req: Request, res: Re
     });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
+  }
+}
+
+export async function getSellerReviewsList(req: Request, res: Response): Promise<void> {
+  const { sellerId } = req.params;
+  const { page = 1, limit = 10 } = req.query;
+
+  try {
+    const result = await getSellerReviews(
+      sellerId, 
+      Number(page), 
+      Number(limit)
+    );
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(400).json({ 
+      error: (err as Error).message 
+    });
   }
 }
