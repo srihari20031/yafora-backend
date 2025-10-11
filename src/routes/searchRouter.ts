@@ -14,6 +14,10 @@ const router = Router();
 // GET /api/search?q=wedding&category=costumes&minPrice=500&maxPrice=2000&page=1&limit=20
 router.get('/', searchProducts);
 
+// Products search endpoint (alias for main search)
+// GET /api/search/products?q=wedding&category=costumes&minPrice=500&maxPrice=2000&page=1&limit=20
+router.get('/products', searchProducts);
+
 // Autocomplete suggestions
 // GET /api/search/autocomplete?q=wed&limit=10
 router.get('/autocomplete', getAutocomplete);
@@ -27,8 +31,8 @@ router.get('/popular', getPopularSearchesList);
 router.get('/trending', getTrendingProductsList);
 
 // Get filter metadata (categories, price ranges, sizes, etc.)
-// GET /api/search/filters
-router.get('/filters', getFiltersMetadataController);
+// GET /api/search/filters-metadata
+router.get('/filters-metadata', getFiltersMetadataController);
 
 // Category-specific search
 // GET /api/search/category/costumes?minPrice=500&maxPrice=2000&page=1&limit=20
