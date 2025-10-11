@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
+import { AuthenticatedRequest } from '../middleware/authMiddlware';
 import { v4 as uuidv4 } from 'uuid';
-
 import { 
   createProduct,   
   deleteProduct, 
@@ -26,49 +26,52 @@ const productImageUpload = createMulterInstance({
 // Export the middleware for use in routes
 export const uploadMiddleware = productImageUpload.array('images', 10);
 
-export async function addProduct(req: Request, res: Response): Promise<void> {
+export async function addProduct(req: AuthenticatedRequest, res: Response): Promise<void> {
   console.log('[ProductController] addProduct called:', { 
     body: req.body, 
     fileCount: req.files ? (req.files as Express.Multer.File[]).length : 0 
   });
-  
+
   try {
     const productData = req.body;
     console.log('[ProductController] Parsed product data:', productData);
 
+    // Parse array fields
+    if (productData.tags) {
+      productData.tags = JSON.parse(productData.tags);
+    }
+    if (productData.occasion_tags) {
+      productData.occasion_tags = JSON.parse(productData.occasion_tags);
+    }
+    if (productData.try_on_location) {
+      productData.try_on_location = JSON.parse(productData.try_on_location);
+    }
+
     const tempProductId = uuidv4();
     console.log('[ProductController] Generated tempProductId:', tempProductId);
-    
+
     let imageUrls: string[] = [];
     if (req.files && Array.isArray(req.files) && req.files.length > 0) {
       console.log('[ProductController] Processing file uploads:', { fileCount: req.files.length });
-      // Convert multer files to File objects
-      const files = req.files.map(file => {
-        console.log('[ProductController] Converting file:', file.originalname);
-        return new File([file.buffer], file.originalname, { type: file.mimetype });
-      });
-      
-      imageUrls = await uploadMultipleImages(files, tempProductId);
+      imageUrls = await uploadMultipleImages(req.files, tempProductId);
       console.log('[ProductController] Uploaded image URLs:', imageUrls);
     }
-    
-    // Handle additional image URLs from request body
-    if (productData.imageUrls && Array.isArray(JSON.parse(productData.imageUrls))) {
-      const urls = JSON.parse(productData.imageUrls);
-      console.log('[ProductController] Parsed image URLs from body:', urls);
-      imageUrls = [...imageUrls, ...urls];
-    }
-    
-    // Create product with image URLs
+
     const finalProductData = {
       ...productData,
-      images: imageUrls
+      seller_id: req.user!.id,
+      images: imageUrls,
+      rental_price_per_day: Number(productData.rental_price_per_day),
+      security_deposit_percentage: Number(productData.security_deposit_percentage),
+      weight: productData.weight ? Number(productData.weight) : undefined,
+      min_rental_days: Number(productData.min_rental_days),
+      max_rental_days: Number(productData.max_rental_days)
     };
     console.log('[ProductController] Final product data for creation:', finalProductData);
-    
+
     const product = await createProduct(finalProductData);
     console.log('[ProductController] Product created successfully:', product);
-    
+
     res.status(201).json({ 
       message: 'Product created successfully', 
       product 
@@ -82,78 +85,76 @@ export async function addProduct(req: Request, res: Response): Promise<void> {
   }
 }
 
-export async function editProduct(req: Request, res: Response): Promise<void> {
+export async function editProduct(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { productId } = req.params;
-  
+
   console.log('[ProductController] editProduct called:', { productId, body: req.body, fileCount: req.files ? (req.files as Express.Multer.File[]).length : 0 });
-  
+
   try {
     const productData = req.body;
     console.log('[ProductController] Parsed product data:', productData);
-    
-    // Get existing product to compare images
+
+    // Parse array fields
+    if (productData.tags) {
+      productData.tags = JSON.parse(productData.tags);
+    }
+    if (productData.occasion_tags) {
+      productData.occasion_tags = JSON.parse(productData.occasion_tags);
+    }
+    if (productData.try_on_location) {
+      productData.try_on_location = JSON.parse(productData.try_on_location);
+    }
+    if (productData.existingImages) {
+      productData.existingImages = JSON.parse(productData.existingImages);
+    }
+
     const existingProduct = await getProductById(productId);
     console.log('[ProductController] Retrieved existing product:', existingProduct);
-    
-    // Handle new image uploads if files are present
+
     let newImageUrls: string[] = [];
     if (req.files && Array.isArray(req.files) && req.files.length > 0) {
       console.log('[ProductController] Processing new file uploads:', { fileCount: req.files.length });
-      const files = req.files.map(file => {
-        console.log('[ProductController] Converting file:', file.originalname);
-        return new File([file.buffer], file.originalname, { type: file.mimetype });
-      });
-      
-      newImageUrls = await uploadMultipleImages(files, productId);
+      newImageUrls = await uploadMultipleImages(req.files, productId);
       console.log('[ProductController] New uploaded image URLs:', newImageUrls);
     }
-    
-    // Combine existing images (that weren't removed) with new uploads
+
     let finalImages: string[] = [];
-    
-    // Add existing images that should be kept
-    if (productData?.existingImages && Array.isArray(JSON.parse(productData?.existingImages))) {
-      finalImages = [...finalImages, ...JSON.parse(productData?.existingImages)];
+    if (productData.existingImages && Array.isArray(productData.existingImages)) {
+      finalImages = [...productData.existingImages];
       console.log('[ProductController] Keeping existing images:', finalImages);
     }
-    
-    // Add new uploaded images
+
     finalImages = [...finalImages, ...newImageUrls];
-    console.log('[ProductController] Added new uploaded images:', finalImages);
-    
-    // Add any additional URLs from request body
-    if (productData?.imageUrls && Array.isArray(JSON.parse(productData?.imageUrls))) {
-      const urls = JSON.parse(productData?.imageUrls);
-      console.log('[ProductController] Parsed additional image URLs:', urls);
-      finalImages = [...finalImages, ...urls];
-    }
-    
-    // Delete removed images from storage
+    console.log('[ProductController] Combined image URLs:', finalImages);
+
     if (existingProduct.images) {
       const imagesToDelete = existingProduct.images.filter(
         (img: string) => !finalImages.includes(img)
       );
       console.log('[ProductController] Images to delete:', imagesToDelete);
-      
+
       for (const imageUrl of imagesToDelete) {
         console.log('[ProductController] Deleting image:', imageUrl);
         await deleteProductImage(imageUrl);
       }
     }
-    
-    // Extract only the fields that should be updated in the database
-    // Exclude 'existingImages' and 'imageUrls' as they are only for processing
+
     const { existingImages, imageUrls, ...dbProductData } = productData;
-    
+
     const finalProductData = {
       ...dbProductData,
-      images: finalImages
+      images: finalImages,
+      rental_price_per_day: Number(productData.rental_price_per_day),
+      security_deposit_percentage: Number(productData.security_deposit_percentage),
+      weight: productData.weight ? Number(productData.weight) : undefined,
+      min_rental_days: Number(productData.min_rental_days),
+      max_rental_days: Number(productData.max_rental_days)
     };
     console.log('[ProductController] Final product data for update:', finalProductData);
-    
+
     const product = await updateProduct(productId, finalProductData);
     console.log('[ProductController] Product updated successfully:', product);
-    
+
     res.status(200).json({ 
       message: 'Product updated successfully', 
       product 
@@ -167,10 +168,10 @@ export async function editProduct(req: Request, res: Response): Promise<void> {
   }
 }
 
-export async function removeProduct(req: Request, res: Response): Promise<void> {
+export async function removeProduct(req: AuthenticatedRequest, res: Response): Promise<void> {
   const { productId } = req.params;
   console.log('[ProductController] removeProduct called:', { productId });
-  
+
   try {
     await deleteProduct(productId);
     console.log('[ProductController] Product deleted successfully:', { productId });
@@ -187,7 +188,7 @@ export async function removeProduct(req: Request, res: Response): Promise<void> 
 export async function getProduct(req: Request, res: Response): Promise<void> {
   const { productId } = req.params;
   console.log('[ProductController] getProduct called:', { productId });
-  
+
   try {
     const product = await getProductById(productId);
     console.log('[ProductController] Product retrieved successfully:', product);
@@ -205,7 +206,7 @@ export async function getMyProducts(req: Request, res: Response): Promise<void> 
   const { sellerId } = req.params;
   const { page = 1, limit = 10 } = req.query;
   console.log('[ProductController] getMyProducts called:', { sellerId, page, limit });
-  
+
   try {
     const result = await getSellerProducts(
       sellerId, 
@@ -218,7 +219,7 @@ export async function getMyProducts(req: Request, res: Response): Promise<void> 
       page: result.page,
       totalPages: result.totalPages
     });
-    
+
     res.status(200).json(result);
   } catch (err) {
     console.error('[ProductController] Error in getMyProducts:', {
@@ -233,32 +234,44 @@ export async function searchProductsHandler(req: Request, res: Response): Promis
   const { 
     q, 
     category, 
+    subcategory,
     minPrice, 
     maxPrice, 
     size, 
     availability,
     featured,
+    color,
+    material,
+    tags,
+    occasion_tags,
+    condition,
     page = 1, 
     limit = 10 
   } = req.query;
   console.log('[ProductController] searchProductsHandler called:', {
     searchQuery: q,
-    filters: { category, minPrice, maxPrice, size, availability, featured },
+    filters: { category, subcategory, minPrice, maxPrice, size, availability, featured, color, material, tags, occasion_tags, condition },
     page,
     limit
   });
-  
+
   try {
     const filters = {
       category: category as string,
+      subcategory: subcategory as string,
       minPrice: minPrice ? Number(minPrice) : undefined,
       maxPrice: maxPrice ? Number(maxPrice) : undefined,
       size: size as string,
       availability: availability as string,
-      featured: featured === 'true' || featured === '1'
+      featured: featured === 'true' || featured === '1',
+      color: color as string,
+      material: material as string,
+      tags: tags ? JSON.parse(tags as string) : undefined,
+      occasion_tags: occasion_tags ? JSON.parse(occasion_tags as string) : undefined,
+      condition: condition as string
     };
     console.log('[ProductController] Parsed filters:', filters);
-    
+
     const products = await searchProducts(
       q as string, 
       filters, 
@@ -271,7 +284,7 @@ export async function searchProductsHandler(req: Request, res: Response): Promis
       page: products.page,
       totalPages: products.totalPages
     });
-    
+
     res.status(200).json(products);
   } catch (err) {
     console.error('[ProductController] Error in searchProductsHandler:', {
@@ -286,7 +299,7 @@ export async function getProductsByCategories(req: Request, res: Response): Prom
   const { category } = req.params;
   const { page = 1, limit = 10 } = req.query;
   console.log('[ProductController] getProductsByCategories called:', { category, page, limit });
-  
+
   try {
     const products = await getProductsByCategory(
       category, 
@@ -299,7 +312,7 @@ export async function getProductsByCategories(req: Request, res: Response): Prom
       page: products.page,
       totalPages: products.totalPages
     });
-    
+
     res.status(200).json(products);
   } catch (err) {
     console.error('[ProductController] Error in getProductsByCategories:', {
@@ -313,7 +326,7 @@ export async function getProductsByCategories(req: Request, res: Response): Prom
 export async function getFeaturedProductsHandler(req: Request, res: Response): Promise<void> {
   const { page = 1, limit = 10 } = req.query;
   console.log('[ProductController] getFeaturedProductsHandler called:', { page, limit });
-  
+
   try {
     const products = await getFeaturedProducts(
       Number(page), 
@@ -325,7 +338,7 @@ export async function getFeaturedProductsHandler(req: Request, res: Response): P
       page: products.page,
       totalPages: products.totalPages
     });
-    
+
     res.status(200).json(products);
   } catch (err) {
     console.error('[ProductController] Error in getFeaturedProductsHandler:', {
