@@ -138,18 +138,33 @@ export async function updateProductStatus(productId: string, status: ProductUpda
   if (!status || !validStatuses.includes(status)) {
     throw new Error('Invalid status');
   }
-  
+
   const { data, error } = await supabaseDB
     .from('products')
     .update({ availability_status: status })
     .eq('id', productId)
     .select()
     .single();
-    
+
   if (error) {
     throw new Error(`Failed to update product status: ${error.message}`);
   }
-  
+
+  return data;
+}
+
+export async function toggleProductVisibility(productId: string, isVisible: boolean) {
+  const { data, error } = await supabaseDB
+    .from('products')
+    .update({ is_visible: isVisible })
+    .eq('id', productId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update product visibility: ${error.message}`);
+  }
+
   return data;
 }
 

@@ -90,6 +90,22 @@ export async function updateProductStatus(req: AuthenticatedRequest, res: Respon
   }
 }
 
+export async function toggleProductVisibility(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { productId } = req.params;
+    const { isVisible } = req.body;
+    if (!productId || typeof isVisible !== 'boolean') {
+      res.status(400).json({ error: 'Product ID and boolean isVisible value are required' });
+      return;
+    }
+    const updatedProduct = await AdminService.toggleProductVisibility(productId, isVisible);
+    res.status(200).json(updatedProduct);
+  } catch (error) {
+    console.error('Error toggling product visibility:', (error as Error).message);
+    res.status(500).json({ error: (error as Error).message });
+  }
+}
+
 export async function getAllOrders(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const orders = await AdminService.getAllOrders();

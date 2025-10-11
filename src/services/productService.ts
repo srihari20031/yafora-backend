@@ -14,6 +14,7 @@ export interface ProductData {
   try_on_available?: boolean;
   try_on_location?: any;
   is_featured?: boolean;
+  is_visible?: boolean;
   color?: string;
   secondary_color?: string;
   material?: string;
@@ -212,7 +213,8 @@ export async function searchProducts(
         full_name,
         pickup_address
       )
-    `, { count: 'exact' });
+    `, { count: 'exact' })
+    .eq('is_visible', true);
 
   if (searchQuery) {
     query = query.or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
@@ -303,6 +305,7 @@ export async function getProductsByCategory(
     `, { count: 'exact' })
     .eq('category', category)
     .eq('availability_status', 'available')
+    .eq('is_visible', true)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -333,6 +336,7 @@ export async function getFeaturedProducts(page: number = 1, limit: number = 10) 
     `, { count: 'exact' })
     .eq('is_featured', true)
     .eq('availability_status', 'available')
+    .eq('is_visible', true)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 

@@ -63,7 +63,8 @@ export async function globalSearch(
       reviews:reviews (
         rating
       )
-    `, { count: 'exact' });
+    `, { count: 'exact' })
+    .eq('is_visible', true);
 
   console.log('🔍 [SERVICE] Base query constructed');
 
@@ -290,6 +291,7 @@ export async function getAutocompleteSuggestions(query: string, limit: number = 
     .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%,subcategory.ilike.%${searchTerm}%,color.ilike.%${searchTerm}%,secondary_color.ilike.%${searchTerm}%,material.ilike.%${searchTerm}%,condition.ilike.%${searchTerm}%`)
     .eq('available', true)
     .eq('availability_status', 'available')
+    .eq('is_visible', true)
     .order('is_featured', { ascending: false })
     .limit(limit);
   
@@ -342,6 +344,7 @@ export async function getPopularSearches(limit: number = 10) {
     .eq('is_featured', true)
     .eq('available', true)
     .eq('availability_status', 'available')
+    .eq('is_visible', true)
     .limit(limit);
 
   console.log('🔥 [SERVICE] Popular searches query executed:', {
@@ -423,6 +426,7 @@ export async function getSearchFiltersMetadata() {
     .select('rental_price_per_day')
     .eq('available', true)
     .eq('availability_status', 'available')
+    .eq('is_visible', true)
     .order('rental_price_per_day', { ascending: true });
 
   console.log('⚙️ [SERVICE] Price range query executed:', {
@@ -454,6 +458,7 @@ export async function getSearchFiltersMetadata() {
     .select('size')
     .eq('available', true)
     .eq('availability_status', 'available')
+    .eq('is_visible', true)
     .not('size', 'is', null);
 
   console.log('⚙️ [SERVICE] Sizes query executed:', {
@@ -572,6 +577,7 @@ export async function getTrendingProducts(limit: number = 10) {
       .eq('is_featured', true)
       .eq('available', true)
       .eq('availability_status', 'available')
+      .eq('is_visible', true)
       .limit(limit);
 
     console.log('📈 [SERVICE] Featured products query executed:', {
@@ -614,7 +620,8 @@ export async function getTrendingProducts(limit: number = 10) {
     `)
     .in('id', trendingProductIds)
     .eq('available', true)
-    .eq('availability_status', 'available');
+    .eq('availability_status', 'available')
+    .eq('is_visible', true);
 
   console.log('📈 [SERVICE] Product details query executed:', {
     duration: `${Date.now() - productsQueryStart}ms`,

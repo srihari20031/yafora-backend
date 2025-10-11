@@ -14,6 +14,7 @@ router.delete('/users/:userId', authMiddleware, adminMiddleware, AdminController
 // Product management routes
 router.get('/products', authMiddleware, adminMiddleware, AdminController.getAllProducts);
 router.patch('/products/:productId/status', authMiddleware, adminMiddleware, AdminController.updateProductStatus);
+router.patch('/products/:productId/visibility', authMiddleware, adminMiddleware, AdminController.toggleProductVisibility);
 router.patch('/products/:productId/commission', authMiddleware, adminMiddleware, AdminController.updatePlatformCommission);
 
 // Order management routes
