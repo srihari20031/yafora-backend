@@ -60,7 +60,7 @@ export async function createReferralInviteController(req: Request, res: Response
 export async function getReferralLinkController(req: Request, res: Response): Promise<void> {
   try {
     const userId = req.params.userId;
-    const baseUrl = 'https://yafora.vercel.app';
+    const baseUrl = 'https://rent.yafora.com';
 
     if (!userId) {
       res.status(400).json({ error: "User ID is required" });

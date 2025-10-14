@@ -51,7 +51,7 @@ export async function getUserReferralCode(userId: string): Promise<string> {
 // ================================
 // 2. GET SHAREABLE REFERRAL LINK
 // ================================
-export async function getReferralLink(userId: string, baseUrl: string = 'https://yafora.vercel.app'): Promise<string> {
+export async function getReferralLink(userId: string, baseUrl: string = 'https://rent.yafora.com'): Promise<string> {
   try {
     const referralCode = await getUserReferralCode(userId);
     return `${baseUrl}/signup?ref=${referralCode}`;
