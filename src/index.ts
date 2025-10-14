@@ -40,7 +40,7 @@ const getAllowedOrigins = (): string[] => {
     'http://localhost:3000', 
     'http://localhost:3001',
     'https://yafora.vercel.app',
-    'https://shop.yafora.com',
+    'https://rent.yafora.com',
   ];
   
   if (envOrigins) {
