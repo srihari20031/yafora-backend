@@ -167,6 +167,8 @@ export async function getProductById(productId: string) {
     .eq('id', productId)
     .single();
 
+    console.log('Fetched product:', data, error);
+
   if (error) {
     throw new Error(`Product not found: ${error.message}`);
   }

@@ -1,12 +1,13 @@
 // controller/userController.ts (updated)
 
 import { Request, Response } from 'express';
-import { 
-  signUpUser, 
-  signInUser, 
+import {
+  signUpUser,
+  signInUser,
   completeReferralForUser,
   requestPasswordReset,
   resetPassword,
+  checkEmailExists,
 } from '../services/userService';
 
 export async function signUp(req: Request, res: Response): Promise<void> {
@@ -18,13 +19,15 @@ export async function signUp(req: Request, res: Response): Promise<void> {
     phoneNumber, 
     whatsappNotifications, 
     emailNotifications,
-    referralCode // New field for referral code
+    referralCode
   } = req.body;
 
   console.log("Request body: ", req.body);
 
+  // Validate required fields
   if (!email || !password || !fullName || !role) {
     res.status(400).json({
+      success: false,
       error: 'Missing required fields',
       details: 'Email, password, full name, and role are required',
     });
@@ -50,7 +53,7 @@ export async function signUp(req: Request, res: Response): Promise<void> {
       phoneNumber, 
       whatsappNotifications, 
       emailNotifications,
-      referralCode // Pass referral code to service
+      referralCode
     );
 
     console.log('SignUp result from service:', {
@@ -60,9 +63,11 @@ export async function signUp(req: Request, res: Response): Promise<void> {
       referralProcessed: result.referralProcessed
     });
 
+    // Set CORS headers
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Origin', req.get('Origin'));
 
+    // Case 1: User created successfully - email confirmation required
     if (result.user && !result.session) {
       console.log('✅ User created successfully - email confirmation required');
       res.status(201).json({
@@ -82,6 +87,7 @@ export async function signUp(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // Case 2: User created with immediate session (auto-confirm enabled)
     if (result.user && result.session?.access_token && result.session?.refresh_token) {
       console.log('✅ User created with session - sending tokens');
       res.status(201).json({
@@ -94,6 +100,7 @@ export async function signUp(req: Request, res: Response): Promise<void> {
           refresh_token: result.session.refresh_token,
           expires_at: result.session.expires_at,
         },
+        requiresConfirmation: false,
         referralProcessed: result.referralProcessed,
         referralMessage: result.referralProcessed ? 
           'Welcome! Your referrer will receive rewards when you complete your first action.' : 
@@ -102,22 +109,45 @@ export async function signUp(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // Case 3: Unexpected state
     console.error('❌ Unexpected signup state:', result);
     res.status(500).json({
+      success: false,
       error: 'Unexpected signup state',
       details: 'User creation status unclear',
     });
   } catch (err) {
     console.error('💥 Signup error:', err);
     const error = err as Error;
-    if (error.message.includes('already registered')) {
+    
+    // ✅ FIXED: Handle specific error cases with proper response structure
+    
+    // Duplicate email error
+    if (error.message.includes('already registered') || 
+        error.message.includes('already exists')) {
       res.status(409).json({
+        success: false,
         error: 'Email already registered',
-        details: 'An account with this email already exists',
+        details: error.message,
       });
       return;
     }
+    
+    // Validation errors
+    if (error.message.includes('Invalid') || 
+        error.message.includes('must') ||
+        error.message.includes('required')) {
+      res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: error.message,
+      });
+      return;
+    }
+    
+    // Generic error
     res.status(400).json({
+      success: false,
       error: 'Signup failed',
       details: error.message,
     });
@@ -322,6 +352,38 @@ export async function resetPasswordController(req: Request, res: Response): Prom
     const error = err as Error;
     res.status(400).json({
       error: 'Failed to reset password',
+      details: error.message
+    });
+  }
+}
+
+// ================================
+// CHECK EMAIL EXISTS CONTROLLER
+// ================================
+export async function checkEmailExistsController(req: Request, res: Response): Promise<void> {
+  const { email } = req.body;
+
+  if (!email) {
+    res.status(400).json({
+      error: 'Missing required field',
+      details: 'Email is required'
+    });
+    return;
+  }
+
+  try {
+    const exists = await checkEmailExists(email);
+
+    res.status(200).json({
+      success: true,
+      exists,
+      message: exists ? 'Email is already registered' : 'Email is available'
+    });
+  } catch (err) {
+    console.error('💥 Check email exists error:', err);
+    const error = err as Error;
+    res.status(500).json({
+      error: 'Failed to check email availability',
       details: error.message
     });
   }

@@ -21,15 +21,19 @@ import {
 
 const router = Router();
 
+// List operations (specific routes first)
+router.get('/list/active', getActiveRentalsList);
+router.get('/list/overdue', getOverdueRentalsList);
+
+// User-specific rentals (specific routes before generic :rentalId)
+router.get('/buyer/:buyerId', getBuyerRentals);
+router.get('/seller/:sellerId', getSellerRentals);
+
 // Core rental operations
 router.post('/', createNewRental);
 router.get('/:rentalId', getRental);
 router.put('/:rentalId', updateRentalDetails);
 router.delete('/:rentalId', cancelRentalOrder);
-
-// User-specific rentals
-router.get('/buyer/:buyerId', getBuyerRentals);
-router.get('/seller/:sellerId', getSellerRentals);
 
 // Delivery management
 router.put('/:rentalId/delivery-status', updateRentalDeliveryStatus);
@@ -51,9 +55,5 @@ router.put('/:rentalId/security-deposit/release', releaseRentalSecurityDeposit);
 // Admin operations
 router.put('/:rentalId/extend', extendRental);
 router.post('/:rentalId/admin-note', addAdminNote);
-
-// List operations
-router.get('/list/active', getActiveRentalsList);
-router.get('/list/overdue', getOverdueRentalsList);
 
 export default router;

@@ -27,7 +27,10 @@ export async function createNewRental(req: Request, res: Response): Promise<void
             special_instructions,
             promo_code_id,
             discount_amount,
-            commission_amount
+            commission_amount,
+            // Buyer selections
+            selected_size,
+            selected_color
         } = req.body;
 
         if (!items || !Array.isArray(items) || items.length === 0) {
@@ -53,7 +56,12 @@ export async function createNewRental(req: Request, res: Response): Promise<void
             deliveryPartnerId: item.delivery_partner_id || null,
             promoCodeId: promo_code_id,
             discountAmount: discount_amount || 0,
-            commissionAmount: commission_amount || 0
+            commissionAmount: commission_amount || 0,
+            // Pass buyer's selections in metadata
+            rentalMetadata: {
+                selected_size: selected_size || item.selected_size,
+                selected_color: selected_color || item.selected_color
+            }
         };
 
         console.log('Normalized rental data for service:', rentalData);
@@ -62,19 +70,18 @@ export async function createNewRental(req: Request, res: Response): Promise<void
 
         // Send notifications after successful rental creation
         try {
-            // Get additional details for notifications (you might need to fetch these from your database)
-            const productName = item.product_name || 'Product'; // Adjust based on your data structure
-            const buyerName = billing_info?.name || 'Customer'; // Adjust based on your data structure
+            // Get product name from metadata or fallback to item data
+            const productName = rental.rental_metadata?.product_title || item.product_name || 'Product';
+            const buyerName = billing_info?.name || 'Customer';
             const rentalDate = item.rental_start_date;
             const deliveryMethod = item.delivery_partner_id ? 'Delivery' : 'Pickup';
             const rentalPeriod = `${item.rental_start_date} to ${item.rental_end_date}`;
             const pickupLocation = billing_info?.address || 'TBD';
 
             console.log("Item: ", item);
-            // Notify seller about new booking
             console.log('Sending notifications for new rental creation...');
             
-            // ✅ FIX: Use seller_id from the created rental object, not from the original item
+            // Use seller_id from the created rental object
             const actualSellerId = rental.seller_id;
             
             console.log("For check:", actualSellerId,
@@ -83,8 +90,9 @@ export async function createNewRental(req: Request, res: Response): Promise<void
                 rentalDate,
                 deliveryMethod);
                 
+            // Notify seller about new booking
             await NotificationTriggers.triggerProductBooked(
-                actualSellerId, // ✅ Use the actual seller_id from database response
+                actualSellerId,
                 productName,
                 buyerName,
                 rentalDate,
@@ -104,7 +112,7 @@ export async function createNewRental(req: Request, res: Response): Promise<void
                 rental.id,
                 'confirmed',
                 {
-                    sellerId: actualSellerId, // ✅ Use the actual seller_id here too
+                    sellerId: actualSellerId,
                     buyerId: buyer_id,
                     productName,
                     buyerName,
@@ -227,7 +235,7 @@ export async function updateRentalPaymentStatus(req: Request, res: Response): Pr
         try {
             if (status === 'completed') {
                 const rental = await getRentalById(rentalId);
-                const productName = rental.product_name || 'Product';
+                const productName = rental.rental_metadata?.product_title || rental.product_name || 'Product';
                 const amount = rental.total_amount?.toString() || '0';
 
                 // Notify seller about payout
@@ -262,7 +270,7 @@ export async function processRentalReturn(req: Request, res: Response): Promise<
 
         // Send return notifications
         try {
-            const productName = rental.product_name || 'Product';
+            const productName = rental.rental_metadata?.product_title || rental.product_name || 'Product';
             const amount = rental.total_amount?.toString() || '0';
 
             // Notify seller about product return
@@ -309,7 +317,7 @@ export async function reportRentalDamage(req: Request, res: Response): Promise<v
 
         // Send damage report notifications
         try {
-            const productName = rental.product_name || 'Product';
+            const productName = rental.rental_metadata?.product_title || rental.product_name || 'Product';
 
             await NotificationTriggers.triggerDamageReported(
                 rental.seller_id,
@@ -342,7 +350,7 @@ export async function reviewRentalDamage(req: Request, res: Response): Promise<v
 
         // Send damage review notifications
         try {
-            const productName = rental.product_name || 'Product';
+            const productName = rental.rental_metadata?.product_title || rental.product_name || 'Product';
 
             if (status === 'approved' && damageFee > 0) {
                 // Notify buyer about damage fee
@@ -377,7 +385,7 @@ export async function releaseRentalSecurityDeposit(req: Request, res: Response):
 
         // Send security deposit release notifications
         try {
-            const productName = rental.product_name || 'Product';
+            const productName = rental.rental_metadata?.product_title || rental.product_name || 'Product';
 
             await NotificationHelpers.handleSecurityDepositProcessing(
                 rentalId,
@@ -424,7 +432,7 @@ export async function getOverdueRentalsList(req: Request, res: Response): Promis
         try {
             if (result.rentals && result.rentals.length > 0) {
                 for (const rental of result.rentals) {
-                    const productName = rental.product_name || 'Product';
+                    const productName = rental.rental_metadata?.product_title || rental.product_name || 'Product';
                     const buyerName = rental.buyer_name || 'Customer';
 
                     await NotificationTriggers.triggerLateReturn(
@@ -458,10 +466,9 @@ export async function cancelRentalOrder(req: Request, res: Response): Promise<vo
 
         // Send cancellation notifications
         try {
-            const productName = rental.product_name || 'Product';
+            const productName = rental.rental_metadata?.product_title || rental.product_name || 'Product';
 
             // Notify buyer about cancellation
-            // You might want to add a specific cancellation trigger in your NotificationTriggers
             await NotificationHelpers.handleOrderStatusUpdate(
                 rentalId,
                 'cancelled',
@@ -507,11 +514,9 @@ export async function extendRental(req: Request, res: Response): Promise<void> {
 
         // Send extension notifications
         try {
-            const productName = rental.product_name || 'Product';
+            const productName = rental.rental_metadata?.product_title || rental.product_name || 'Product';
 
             // Notify buyer about rental extension
-            // You might want to add a specific extension trigger
-            // For now, using a generic notification approach
             await NotificationTriggers.triggerRentalConfirmed(
                 rental.buyer_id,
                 productName,
@@ -559,10 +564,9 @@ export async function assignDeliveryPartner(req: Request, res: Response): Promis
         // Send delivery assignment notifications
         try {
             const rental = await getRentalById(rentalId);
-            const productName = rental.product_name || 'Product';
+            const productName = rental.rental_metadata?.product_title || rental.product_name || 'Product';
 
             // Notify buyer about delivery partner assignment
-            // You might want to add a specific delivery assignment trigger
             console.log(`Delivery partner ${deliveryPartnerId} assigned for rental ${rentalId}`);
         } catch (notificationError) {
             console.error('Failed to send delivery assignment notifications:', notificationError);

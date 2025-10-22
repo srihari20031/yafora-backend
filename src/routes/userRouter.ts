@@ -8,6 +8,7 @@ import {
   completeReferralController,
   forgotPassword,
   resetPasswordController,
+  checkEmailExistsController,
 } from '../controller/userController';
 
 const router = Router();
@@ -19,5 +20,6 @@ router.post('/signout', signOut);
 router.post('/complete-referral', completeReferralController);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPasswordController);
+router.post('/check-email', checkEmailExistsController);
 
 export default router;

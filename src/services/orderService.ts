@@ -1,5 +1,25 @@
 import supabaseDB from "../../config/connectDB";
 
+export interface RentalMetadata {
+  // Product details at time of booking
+  product_title: string;
+  category: string;
+  subcategory?: string;
+  
+  // Buyer's selections
+  selected_size?: string;
+  selected_color?: string;
+  
+  // Seller details at time of booking
+  seller_name: string;
+  seller_phone?: string;
+  seller_pickup_address?: any;
+  
+  // Pricing breakdown (for reference)
+  rental_price_per_day: number;
+  security_deposit_percentage: number;
+}
+
 export interface CreateRentalData {
   buyerId: string;
   productId: string;
@@ -17,6 +37,7 @@ export interface CreateRentalData {
   promoCodeId?: string;
   discountAmount?: number;
   commissionAmount?: number;
+  rentalMetadata?: Partial<RentalMetadata>; // Buyer's selections
 }
 
 export interface UpdateRentalData {
@@ -39,28 +60,65 @@ export interface UpdateRentalData {
   promoCodeId?: string;
   discountAmount?: number;
   commissionAmount?: number;
+  rentalEndDate?: string;
+  expectedReturnDate?: string;
+  rentalDurationDays?: number;
+  totalRentalPrice?: number;
+  totalAmount?: number;
+  deliveryPartnerId?: string;
+  deliveryAssignmentType?: string;
+  deliveryAssignedAt?: string;
+  lastAdminActionAt?: string;
 }
 
 export async function createRental(rentalData: CreateRentalData) {
     console.log('Creating rental with data:', rentalData);
 
-    // Fetch seller_id from products table
-    const { data: productData, error: sellerError } = await supabaseDB
+    // Fetch complete product and seller details
+    const { data: productData, error: productError } = await supabaseDB
         .from('products')
-        .select('seller_id')
+        .select(`
+            *,
+            profiles!products_seller_id_fkey (
+                id,
+                full_name,
+                phone_number,
+                pickup_address
+            )
+        `)
         .eq('id', rentalData.productId)
         .maybeSingle();
 
-    if (sellerError || !productData?.seller_id) {
-        throw new Error(`Failed to fetch seller_id for product ${rentalData.productId}: ${sellerError?.message || 'Product not found'}`);
+    if (productError || !productData) {
+        throw new Error(`Failed to fetch product details: ${productError?.message || 'Product not found'}`);
     }
+
+    // Build rental metadata from product details
+    const rentalMetadata: RentalMetadata = {
+        product_title: productData.title,
+        category: productData.category,
+        subcategory: productData.subcategory,
+        selected_size: rentalData.rentalMetadata?.selected_size || productData.size,
+        selected_color: rentalData.rentalMetadata?.selected_color || productData.color,
+        seller_name: productData.profiles?.full_name || 'Unknown',
+        seller_phone: productData.profiles?.phone_number,
+        seller_pickup_address: productData.profiles?.pickup_address,
+        rental_price_per_day: productData.rental_price_per_day,
+        security_deposit_percentage: productData.security_deposit_percentage
+    };
+
+    // Merge with any provided metadata (in case of custom selections)
+    const finalMetadata = {
+        ...rentalMetadata,
+        ...(rentalData.rentalMetadata || {})
+    };
 
     const { data, error } = await supabaseDB
         .from('orders')
         .insert([{
             buyer_id: rentalData.buyerId,
             product_id: rentalData.productId,
-            seller_id: productData.seller_id, // Use fetched seller_id
+            seller_id: productData.seller_id,
             rental_start_date: rentalData.rental_start_date,
             rental_end_date: rentalData.rental_end_date,
             rental_duration_days: rentalData.rentalDurationDays,
@@ -78,7 +136,8 @@ export async function createRental(rentalData: CreateRentalData) {
             promo_code_id: rentalData.promoCodeId,
             discount_amount: rentalData.discountAmount || 0,
             commission_amount: rentalData.commissionAmount || 0,
-            security_deposit_refunded_amount: rentalData.securityDeposit || 0
+            security_deposit_refunded_amount: rentalData.securityDeposit || 0,
+            rental_metadata: finalMetadata // Store complete product snapshot with buyer selections
         }])
         .select()
         .single();

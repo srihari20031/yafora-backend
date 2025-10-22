@@ -181,51 +181,85 @@ export async function signUpUser(
       },
     });
 
+    // ✅ FIXED: Check for error FIRST before processing
     if (error) {
-      if (error.message.includes('already registered')) {
+      console.error('❌ Supabase signup error:', error);
+      
+      // Handle duplicate email specifically
+      if (error.message.includes('already registered') || 
+          error.message.includes('User already registered') ||
+          error.status === 422) {
         throw new Error('An account with this email already exists');
       }
-      throw new Error(error.message);
+      
+      // Handle email not confirmed
+      if (error.message.includes('Email not confirmed')) {
+        throw new Error('Please confirm your email before signing in');
+      }
+      
+      // Generic error
+      throw new Error(error.message || 'Signup failed');
+    }
+
+    // ✅ FIXED: Check if user was created but might be a duplicate (Supabase sometimes returns user without error for duplicates)
+    if (!data.user) {
+      console.error('❌ No user returned from Supabase');
+      throw new Error('Failed to create user account');
+    }
+
+    // Check if this is a duplicate by checking if user already has a profile
+    const { data: existingProfile, error: profileCheckError } = await supabaseDB
+      .from('profiles')
+      .select('id, email')
+      .eq('email', email.toLowerCase().trim())
+      .single();
+
+    if (existingProfile && !profileCheckError) {
+      // Profile already exists - this is a duplicate
+      console.warn('⚠️ User profile already exists for email:', email);
+      throw new Error('An account with this email already exists');
     }
 
     // Update or insert profile data
-    if (data.user) {
-      console.log('✅ User created - updating/inserting profile');
-      try {
-        // Generate unique referral code for the new user
-        const userReferralCode = await generateUniqueReferralCode();
-        
-        const { error: profileError } = await supabaseDB
-          .from('profiles')
-          .upsert({
-            id: data.user.id,
-            email: email.toLowerCase().trim(),
-            full_name: fullName.trim(),
-            role: lowercaseRole,
-            phone_number: phoneNumber,
-            whatsapp_notifications: whatsappNotifications ?? false,
-            email_notifications: emailNotifications ?? true,
-            is_kyc_verified: false,
-            kyc_status: 'not_started',
-            referral_code: userReferralCode,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', data.user.id);
+    console.log('✅ User created - updating/inserting profile');
+    try {
+      // Generate unique referral code for the new user
+      const userReferralCode = await generateUniqueReferralCode();
+      
+      const { error: profileError } = await supabaseDB
+        .from('profiles')
+        .upsert({
+          id: data.user.id,
+          email: email.toLowerCase().trim(),
+          full_name: fullName.trim(),
+          role: lowercaseRole,
+          phone_number: phoneNumber,
+          whatsapp_notifications: whatsappNotifications ?? false,
+          email_notifications: emailNotifications ?? true,
+          is_kyc_verified: false,
+          kyc_status: 'not_started',
+          referral_code: userReferralCode,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', data.user.id);
 
-        if (profileError) {
-          console.warn('⚠️ Profile upsert error (non-critical):', profileError);
-        } else {
-          console.log(`✅ Profile upsert successful - User referral code: ${userReferralCode}`);
-          
-          // Process referral if valid code was provided
-          if (referralValid && referralCode) {
-            await validateAndProcessReferral(referralCode.trim(), data.user.id);
-          }
+      if (profileError) {
+        console.error('❌ Profile upsert error:', profileError);
+        // Don't throw here, but log the error
+        console.warn('⚠️ Profile upsert failed but continuing:', profileError.message);
+      } else {
+        console.log(`✅ Profile upsert successful - User referral code: ${userReferralCode}`);
+        
+        // Process referral if valid code was provided
+        if (referralValid && referralCode) {
+          await validateAndProcessReferral(referralCode.trim(), data.user.id);
         }
-      } catch (profileError) {
-        console.warn('⚠️ Profile upsert exception (non-critical):', profileError);
       }
+    } catch (profileError) {
+      console.error('❌ Profile creation exception:', profileError);
+      // Don't throw, but log
+      console.warn('⚠️ Profile setup failed but user was created');
     }
 
     return {
@@ -234,6 +268,7 @@ export async function signUpUser(
     };
   } catch (error) {
     console.error('💥 SignUp service error:', error);
+    // Re-throw the error to be handled by the controller
     throw error;
   }
 }
@@ -479,6 +514,34 @@ export async function getUserReferralStats(userId: string) {
     };
   } catch (error) {
     console.error('💥 Get referral stats error:', error);
+    throw error;
+  }
+}
+
+export async function checkEmailExists(email: string): Promise<boolean> {
+  try {
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Check in profiles table
+    const { data: profile, error } = await supabaseDB
+      .from('profiles')
+      .select('id, email')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      // PGRST116 is "no rows returned" - that's fine, means email doesn't exist
+      console.error('Error checking email:', error);
+      throw new Error('Failed to check email availability');
+    }
+
+    // If profile exists, email is taken
+    if (profile) {
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('💥 Check email exists error:', error);
     throw error;
   }
 }
