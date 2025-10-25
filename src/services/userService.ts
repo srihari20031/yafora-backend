@@ -98,6 +98,9 @@ async function validateAndProcessReferral(referralCode: string, newUserId: strin
 // ================================
 // SIGNUP FUNCTION
 // ================================
+// ================================
+// SIGNUP FUNCTION - FIXED VERSION
+// ================================
 export async function signUpUser(
   email: string,
   password: string,
@@ -144,6 +147,41 @@ export async function signUpUser(
     throw new Error('Invalid phone number format');
   }
   
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // ✅ CRITICAL FIX: Check for existing profile BEFORE attempting signup
+  console.log('Checking if email already exists in profiles...');
+  const { data: existingProfile, error: profileCheckError } = await supabaseDB
+    .from('profiles')
+    .select('id, email')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+
+  if (existingProfile) {
+    console.error('❌ Email already exists in profiles:', normalizedEmail);
+    throw new Error('An account with this email already exists');
+  }
+
+  // Also check in auth.users via admin API if available
+  // This catches soft-deleted users that might not be in profiles
+  try {
+    const { data: authUsers, error: authError } = await supabaseDB.auth.admin.listUsers();
+    
+    if (!authError && authUsers?.users) {
+      const existingAuthUser = authUsers.users.find(
+        u => u.email?.toLowerCase() === normalizedEmail
+      );
+      
+      if (existingAuthUser) {
+        console.error('❌ Email exists in auth.users:', normalizedEmail);
+        throw new Error('An account with this email already exists');
+      }
+    }
+  } catch (adminError) {
+    // Admin API might not be available, continue with regular signup
+    console.warn('⚠️ Could not check auth.users:', adminError);
+  }
+  
   // Validate referral code if provided
   let referralValid = false;
   if (referralCode) {
@@ -167,7 +205,7 @@ export async function signUpUser(
 
   try {
     const { data, error } = await supabaseDB.auth.signUp({
-      email: email.toLowerCase().trim(),
+      email: normalizedEmail,
       password,
       options: {
         data: {
@@ -181,14 +219,20 @@ export async function signUpUser(
       },
     });
 
-    // ✅ FIXED: Check for error FIRST before processing
+    // ✅ ENHANCED ERROR HANDLING
     if (error) {
       console.error('❌ Supabase signup error:', error);
       
-      // Handle duplicate email specifically
-      if (error.message.includes('already registered') || 
-          error.message.includes('User already registered') ||
-          error.status === 422) {
+      // Handle all variations of duplicate email errors
+      if (
+        error.message.includes('already registered') || 
+        error.message.includes('User already registered') ||
+        error.message.includes('already been registered') ||
+        error.message.includes('duplicate') ||
+        error.message.includes('unique') ||
+        error.status === 422 ||
+        error.code === '23505' // PostgreSQL unique violation
+      ) {
         throw new Error('An account with this email already exists');
       }
       
@@ -201,23 +245,53 @@ export async function signUpUser(
       throw new Error(error.message || 'Signup failed');
     }
 
-    // ✅ FIXED: Check if user was created but might be a duplicate (Supabase sometimes returns user without error for duplicates)
+    // ✅ ENHANCED USER VALIDATION
     if (!data.user) {
       console.error('❌ No user returned from Supabase');
       throw new Error('Failed to create user account');
     }
 
-    // Check if this is a duplicate by checking if user already has a profile
-    const { data: existingProfile, error: profileCheckError } = await supabaseDB
-      .from('profiles')
-      .select('id, email')
-      .eq('email', email.toLowerCase().trim())
-      .single();
+    // ✅ ADDITIONAL CHECK: Verify this is a NEW user, not an existing one
+    // Supabase sometimes returns existing users without error for duplicate signups
+    if (data.user.created_at) {
+      const createdTime = new Date(data.user.created_at).getTime();
+      const now = Date.now();
+      const timeDiff = now - createdTime;
+      
+      // If user was created more than 5 seconds ago, it's likely a duplicate
+      if (timeDiff > 5000) {
+        console.warn('⚠️ User was created earlier, possible duplicate:', {
+          email: normalizedEmail,
+          userId: data.user.id,
+          createdAt: data.user.created_at,
+          timeDiff
+        });
+        throw new Error('An account with this email already exists');
+      }
+    }
 
-    if (existingProfile && !profileCheckError) {
-      // Profile already exists - this is a duplicate
-      console.warn('⚠️ User profile already exists for email:', email);
-      throw new Error('An account with this email already exists');
+    // Double-check profile doesn't exist (race condition protection)
+    const { data: doubleCheckProfile, error: doubleCheckError } = await supabaseDB
+      .from('profiles')
+      .select('id, email, created_at')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (doubleCheckProfile && !doubleCheckError) {
+      // Check if profile was just created or existed before
+      const profileCreatedTime = new Date(doubleCheckProfile.created_at).getTime();
+      const now = Date.now();
+      const profileAge = now - profileCreatedTime;
+      
+      if (profileAge > 5000) {
+        console.error('❌ Profile already exists:', {
+          email: normalizedEmail,
+          profileId: doubleCheckProfile.id,
+          createdAt: doubleCheckProfile.created_at,
+          age: profileAge
+        });
+        throw new Error('An account with this email already exists');
+      }
     }
 
     // Update or insert profile data
@@ -230,7 +304,7 @@ export async function signUpUser(
         .from('profiles')
         .upsert({
           id: data.user.id,
-          email: email.toLowerCase().trim(),
+          email: normalizedEmail,
           full_name: fullName.trim(),
           role: lowercaseRole,
           phone_number: phoneNumber,
@@ -241,12 +315,25 @@ export async function signUpUser(
           referral_code: userReferralCode,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'id' // Only upsert based on ID, not email
         })
         .eq('id', data.user.id);
 
       if (profileError) {
         console.error('❌ Profile upsert error:', profileError);
-        // Don't throw here, but log the error
+        
+        // If profile creation fails due to duplicate, clean up auth user
+        if (profileError.code === '23505') {
+          console.log('🧹 Cleaning up auth user due to duplicate profile...');
+          try {
+            await supabaseDB.auth.admin.deleteUser(data.user.id);
+          } catch (cleanupError) {
+            console.error('Failed to cleanup auth user:', cleanupError);
+          }
+          throw new Error('An account with this email already exists');
+        }
+        
         console.warn('⚠️ Profile upsert failed but continuing:', profileError.message);
       } else {
         console.log(`✅ Profile upsert successful - User referral code: ${userReferralCode}`);
@@ -258,8 +345,16 @@ export async function signUpUser(
       }
     } catch (profileError) {
       console.error('❌ Profile creation exception:', profileError);
-      // Don't throw, but log
-      console.warn('⚠️ Profile setup failed but user was created');
+      
+      // Clean up auth user if profile creation fails
+      console.log('🧹 Cleaning up auth user due to profile creation failure...');
+      try {
+        await supabaseDB.auth.admin.deleteUser(data.user.id);
+      } catch (cleanupError) {
+        console.error('Failed to cleanup auth user:', cleanupError);
+      }
+      
+      throw new Error('Failed to create user profile');
     }
 
     return {
@@ -268,7 +363,6 @@ export async function signUpUser(
     };
   } catch (error) {
     console.error('💥 SignUp service error:', error);
-    // Re-throw the error to be handled by the controller
     throw error;
   }
 }
