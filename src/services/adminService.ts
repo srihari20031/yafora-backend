@@ -116,21 +116,64 @@ export async function updateUserStatus(userId: string, status: UserUpdate['statu
   return data;
 }
 
-export async function getAllProducts() {
-  const { data, error } = await supabaseDB
+export async function getAllProducts(options?: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  category?: string;
+  seller_id?: string;
+  search?: string;
+}) {
+  const { page = 1, limit = 10, status, category, seller_id, search } = options || {};
+
+  let query = supabaseDB
     .from('products')
     .select(`
       *,
       profiles!products_seller_id_fkey (
         email
       )
-    `);
-    
+    `, { count: 'exact' });
+
+  // Apply filters
+  if (status) {
+    query = query.eq('availability_status', status);
+  }
+
+  if (category) {
+    query = query.eq('category', category);
+  }
+
+  if (seller_id) {
+    query = query.eq('seller_id', seller_id);
+  }
+
+  if (search) {
+    query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+  }
+
+  // Apply pagination
+  const offset = (page - 1) * limit;
+  query = query.range(offset, offset + limit - 1);
+
+  // Order by creation date (newest first)
+  query = query.order('created_at', { ascending: false });
+
+  const { data, error, count } = await query;
+
   if (error) {
     throw new Error(`Failed to fetch products: ${error.message}`);
   }
-  
-  return data;
+
+  return {
+    products: data,
+    pagination: {
+      page,
+      limit,
+      total: count || 0,
+      totalPages: Math.ceil((count || 0) / limit)
+    }
+  };
 }
 
 export async function updateProductStatus(productId: string, status: ProductUpdate['status']) {
@@ -389,7 +432,17 @@ export async function manageReferralProgram(
 export async function getAllReferrals(): Promise<Referral[]> {
   const { data, error } = await supabaseDB
     .from('referrals')
-    .select('*')
+    .select(`
+      *,
+      referrer:profiles!referrals_referrer_id_fkey (
+        full_name,
+        email
+      ),
+      referred:profiles!referrals_referred_id_fkey (
+        full_name,
+        email
+      )
+    `)
     .order('created_at', { ascending: false });
 
   if (error) {

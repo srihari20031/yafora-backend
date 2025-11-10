@@ -62,8 +62,26 @@ export async function updateUserStatus(req: AuthenticatedRequest, res: Response)
 
 export async function getAllProducts(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
-    const products = await AdminService.getAllProducts();
-    res.status(200).json(products);
+    const {
+      page = '1',
+      limit = '10',
+      status,
+      category,
+      seller_id,
+      search
+    } = req.query;
+
+    const options = {
+      page: parseInt(page as string, 10),
+      limit: parseInt(limit as string, 10),
+      status: status as string,
+      category: category as string,
+      seller_id: seller_id as string,
+      search: search as string
+    };
+
+    const result = await AdminService.getAllProducts(options);
+    res.status(200).json(result);
   } catch (error) {
     console.error('Error fetching products:', (error as Error).message);
     res.status(500).json({ error: (error as Error).message });
