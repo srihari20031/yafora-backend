@@ -12,7 +12,7 @@ import {
 export async function searchProducts(req: Request, res: Response): Promise<void> {
   const startTime = Date.now();
   
-  const { 
+  const {
     q: query = '',
     page = 1,
     limit = 20,
@@ -29,7 +29,8 @@ export async function searchProducts(req: Request, res: Response): Promise<void>
     condition,
     featured,
     tags,
-    occasion_tags
+    occasion_tags,
+    groupByCategory
   } = req.query;
 
   console.log('🔍 [SEARCH] Incoming search request:', {
@@ -65,7 +66,8 @@ export async function searchProducts(req: Request, res: Response): Promise<void>
       query as string,
       Number(page),
       Number(limit),
-      filters
+      filters,
+      groupByCategory === 'true'
     );
 
     const duration = Date.now() - startTime;

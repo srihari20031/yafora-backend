@@ -259,6 +259,17 @@ export async function updatePaymentStatus(rentalId: string, status: string) {
         throw new Error(`Failed to update payment status: ${error.message}`);
     }
 
+    // If payment status is completed, trigger referral completion for referred users
+    if (status === 'completed' && data) {
+        try {
+            const { completeReferralForUser } = await import('./userService');
+            await completeReferralForUser(data.buyer_id, 'first_purchase');
+            console.log(`Referral completion attempted for buyer ${data.buyer_id} on payment completion`);
+        } catch (referralError) {
+            console.log('No pending referral found or referral completion failed (this is normal for non-referred users):', (referralError as Error).message);
+        }
+    }
+
     return data;
 }
 

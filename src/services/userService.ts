@@ -111,6 +111,7 @@ export async function signUpUser(
   emailNotifications?: boolean,
   referralCode?: string
 ) {
+  console.log('🔍 Signup called with referralCode:', referralCode);
   const lowercaseRole = role.toLowerCase();
 
   if (!['buyer', 'seller'].includes(lowercaseRole)) {
@@ -185,6 +186,7 @@ export async function signUpUser(
   // Validate referral code if provided
   let referralValid = false;
   if (referralCode) {
+    console.log('🔍 Validating referral code:', referralCode.trim());
     try {
       const { data: referrer, error } = await supabaseDB
         .from('profiles')
@@ -193,6 +195,7 @@ export async function signUpUser(
         .single();
 
       referralValid = !error && !!referrer;
+      console.log('🔍 Referral code validation result:', { referralValid, referrer: referrer?.id, error: error?.message });
       if (!referralValid) {
         console.warn(`⚠️ Invalid referral code provided during signup: ${referralCode}`);
       }
@@ -204,6 +207,7 @@ export async function signUpUser(
   console.log('Starting user signup process...');
 
   try {
+    console.log('🔍 Sending referral_code to Supabase auth:', referralCode?.trim());
     const { data, error } = await supabaseDB.auth.signUp({
       email: normalizedEmail,
       password,
@@ -340,6 +344,7 @@ export async function signUpUser(
         
         // Process referral if valid code was provided
         if (referralValid && referralCode) {
+          console.log('🔍 Processing referral for new user:', data.user.id, 'with code:', referralCode.trim());
           await validateAndProcessReferral(referralCode.trim(), data.user.id);
         }
       }

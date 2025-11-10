@@ -20,6 +20,7 @@ router.patch('/products/:productId/commission', authMiddleware, adminMiddleware,
 // Order management routes
 router.get('/orders', authMiddleware, adminMiddleware, AdminController.getAllOrders);
 router.patch('/orders/:orderId/status', authMiddleware, adminMiddleware, AdminController.updateOrderStatus);
+router.put('/orders/:orderId/payment-status', authMiddleware, adminMiddleware, AdminController.updateOrderPaymentStatus);
 router.patch('/orders/:orderId/late-fee', authMiddleware, adminMiddleware, AdminController.applyLateFee);
 router.patch('/orders/:orderId/damage-claim', authMiddleware, adminMiddleware, AdminController.handleDamageClaim);
 

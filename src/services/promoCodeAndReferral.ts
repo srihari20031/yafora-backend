@@ -219,6 +219,17 @@ export async function getReferralStats(userId: string, baseUrl?: string): Promis
     const pendingReferrals = referrals.filter(r => r.status === 'pending');
     const totalEarnings = completedReferrals.reduce((sum, r) => sum + r.reward_amount, 0);
 
+    // Transform referrals to match frontend expectations
+    const transformedReferrals = referrals.map(referral => ({
+      id: referral.id,
+      referred_user_email: referral.referred_user?.email || 'Unknown',
+      referred_user_id: referral.referred_id,
+      status: referral.status === 'completed' ? 'rewarded' : referral.status, // Map 'completed' to 'rewarded' for frontend
+      reward_amount: referral.reward_amount,
+      created_at: referral.created_at,
+      completed_at: referral.completed_at
+    }));
+
     return {
       referralCode,
       referralLink,
@@ -226,7 +237,7 @@ export async function getReferralStats(userId: string, baseUrl?: string): Promis
       completedReferrals: completedReferrals.length,
       pendingReferrals: pendingReferrals.length,
       totalEarnings,
-      referrals
+      referrals: transformedReferrals
     };
   } catch (error) {
     throw new Error(`Failed to get referral stats: ${(error as Error).message}`);

@@ -196,18 +196,38 @@ export async function updateOrderStatus(orderId: string, status: OrderUpdate['st
   if (!status || !validStatuses.includes(status)) {
     throw new Error('Invalid status');
   }
-  
+
   const { data, error } = await supabaseDB
     .from('orders')
     .update({ delivery_status: status })
     .eq('id', orderId)
     .select()
     .single();
-    
+
   if (error) {
     throw new Error(`Failed to update order status: ${error.message}`);
   }
-  
+
+  return data;
+}
+
+export async function updateOrderPaymentStatus(orderId: string, status: string) {
+  const validStatuses = ['pending', 'completed', 'failed', 'refunded'];
+  if (!status || !validStatuses.includes(status)) {
+    throw new Error('Invalid payment status');
+  }
+
+  const { data, error } = await supabaseDB
+    .from('orders')
+    .update({ payment_status: status })
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update order payment status: ${error.message}`);
+  }
+
   return data;
 }
 

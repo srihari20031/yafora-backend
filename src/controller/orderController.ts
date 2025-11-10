@@ -227,7 +227,7 @@ export async function updateRentalDeliveryStatus(req: Request, res: Response): P
 export async function updateRentalPaymentStatus(req: Request, res: Response): Promise<void> {
     const { rentalId } = req.params;
     const { status } = req.body;
-    
+
     try {
         const updatedRental = await updatePaymentStatus(rentalId, status);
 
@@ -244,6 +244,15 @@ export async function updateRentalPaymentStatus(req: Request, res: Response): Pr
                     amount,
                     productName
                 );
+
+                // Complete referral for first purchase if buyer was referred
+                try {
+                    const { completeReferralForUser } = await import('../services/userService');
+                    await completeReferralForUser(rental.buyer_id, 'first_purchase');
+                    console.log(`Referral completion attempted for buyer ${rental.buyer_id}`);
+                } catch (referralError) {
+                    console.log('No pending referral found or referral completion failed (this is normal for non-referred users):', (referralError as Error).message);
+                }
             }
 
             console.log('Payment status notifications sent successfully');
@@ -251,9 +260,9 @@ export async function updateRentalPaymentStatus(req: Request, res: Response): Pr
             console.error('Failed to send payment status notifications:', notificationError);
         }
 
-        res.status(200).json({ 
-            message: 'Payment status updated successfully', 
-            rental: updatedRental 
+        res.status(200).json({
+            message: 'Payment status updated successfully',
+            rental: updatedRental
         });
     } catch (err) {
         res.status(400).json({ error: (err as Error).message });

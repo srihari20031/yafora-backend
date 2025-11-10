@@ -25,9 +25,16 @@ interface SearchResult {
   totalPages: number;
   suggestions: {
     categories: string[];
+    subcategories: string[];
     priceRanges: { label: string; min: number; max: number }[];
   };
   filters: SearchFilters;
+  categories?: {
+    subcategory: string;
+    count: number;
+    products: any[];
+  }[];
+  allProducts?: any[];
 }
 
 // Main search function
@@ -35,7 +42,8 @@ export async function globalSearch(
   query: string,
   page: number = 1,
   limit: number = 20,
-  filters: SearchFilters = {}
+  filters: SearchFilters = {},
+  groupByCategory: boolean = false
 ): Promise<SearchResult> {
   const startTime = Date.now();
   const offset = (page - 1) * limit;
@@ -46,6 +54,7 @@ export async function globalSearch(
     limit,
     offset,
     filters: JSON.stringify(filters, null, 2),
+    groupByCategory,
     timestamp: new Date().toISOString()
   });
 
@@ -210,23 +219,15 @@ export async function globalSearch(
   const suggestionsStartTime = Date.now();
   const suggestions = await getSearchSuggestions(query, filters);
   const suggestionsDuration = Date.now() - suggestionsStartTime;
-  
+
   console.log('🔍 [SERVICE] Suggestions fetched:', {
     duration: `${suggestionsDuration}ms`,
     categoriesCount: suggestions.categories.length,
+    subcategoriesCount: suggestions.subcategories.length,
     priceRangesCount: suggestions.priceRanges.length
   });
 
-  const totalDuration = Date.now() - startTime;
-  console.log('✅ [SERVICE] globalSearch completed:', {
-    totalDuration: `${totalDuration}ms`,
-    productsReturned: productsWithRatings.length,
-    totalResults: count,
-    page,
-    totalPages: Math.ceil((count || 0) / limit)
-  });
-
-  return {
+  let result: SearchResult = {
     products: productsWithRatings,
     total: count || 0,
     page,
@@ -235,6 +236,155 @@ export async function globalSearch(
     suggestions,
     filters
   };
+
+  // If groupByCategory is enabled, add category grouping
+  if (groupByCategory) {
+    console.log('🔍 [SERVICE] Grouping results by category...');
+    const categoryGroupingStartTime = Date.now();
+
+    // Get all products without pagination for grouping
+    let allProductsQuery = supabaseDB
+      .from('products')
+      .select(`
+        *,
+        seller:profiles!products_seller_id_fkey (
+          id,
+          full_name,
+          email,
+          profile_picture_url
+        ),
+        reviews:reviews (
+          rating
+        )
+      `, { count: 'exact' })
+      .eq('is_visible', true);
+
+    // Apply same filters as main query
+    if (query && query.trim() !== '') {
+      const searchTerm = query.trim().toLowerCase();
+      allProductsQuery = allProductsQuery.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%,subcategory.ilike.%${searchTerm}%,color.ilike.%${searchTerm}%,secondary_color.ilike.%${searchTerm}%,material.ilike.%${searchTerm}%,condition.ilike.%${searchTerm}%`);
+    }
+
+    // Apply filters
+    if (filters.category) {
+      allProductsQuery = allProductsQuery.eq('category', filters.category);
+    }
+    if (filters.minPrice !== undefined) {
+      allProductsQuery = allProductsQuery.gte('rental_price_per_day', filters.minPrice);
+    }
+    if (filters.maxPrice !== undefined) {
+      allProductsQuery = allProductsQuery.lte('rental_price_per_day', filters.maxPrice);
+    }
+    if (filters.availability) {
+      allProductsQuery = allProductsQuery.eq('availability_status', filters.availability);
+    } else {
+      allProductsQuery = allProductsQuery.eq('availability_status', 'available');
+    }
+    if (filters.tryOnAvailable !== undefined) {
+      allProductsQuery = allProductsQuery.eq('try_on_available', filters.tryOnAvailable);
+    }
+    if (filters.sellerId) {
+      allProductsQuery = allProductsQuery.eq('seller_id', filters.sellerId);
+    }
+    if (filters.size) {
+      allProductsQuery = allProductsQuery.eq('size', filters.size);
+    }
+    if (filters.subcategory) {
+      allProductsQuery = allProductsQuery.eq('subcategory', filters.subcategory);
+    }
+    if (filters.featured) {
+      allProductsQuery = allProductsQuery.eq('is_featured', true);
+    }
+    if (filters.color) {
+      allProductsQuery = allProductsQuery.eq('color', filters.color);
+    }
+    if (filters.material) {
+      allProductsQuery = allProductsQuery.eq('material', filters.material);
+    }
+    if (filters.tags && filters.tags.length > 0) {
+      allProductsQuery = allProductsQuery.contains('tags', filters.tags);
+    }
+    if (filters.occasion_tags && filters.occasion_tags.length > 0) {
+      allProductsQuery = allProductsQuery.contains('occasion_tags', filters.occasion_tags);
+    }
+    if (filters.condition) {
+      allProductsQuery = allProductsQuery.eq('condition', filters.condition);
+    }
+    allProductsQuery = allProductsQuery.eq('available', true);
+
+    const { data: allProductsData, error: allProductsError } = await allProductsQuery;
+
+    if (allProductsError) {
+      console.error('❌ [SERVICE] All products query error:', allProductsError);
+      throw new Error(`Failed to fetch all products for grouping: ${allProductsError.message}`);
+    }
+
+    // Calculate ratings for all products
+    const allProductsWithRatings = allProductsData?.map((product: any) => {
+      const reviews = product.reviews || [];
+      const avgRating = reviews.length > 0
+        ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length
+        : 0;
+
+      return {
+        ...product,
+        average_rating: avgRating,
+        total_reviews: reviews.length,
+        reviews: undefined
+      };
+    }) || [];
+
+    // Group by subcategory
+    const subcategoryGroups: { [key: string]: any[] } = {};
+    allProductsWithRatings.forEach(product => {
+      const subcategory = product.subcategory || 'other';
+      if (!subcategoryGroups[subcategory]) {
+        subcategoryGroups[subcategory] = [];
+      }
+      subcategoryGroups[subcategory].push(product);
+    });
+
+    // Sort subcategories by count (descending) and get top 3-5 products per subcategory
+    const categories = Object.entries(subcategoryGroups)
+      .sort(([, a], [, b]) => b.length - a.length)
+      .map(([subcategory, products]) => {
+        // Sort products by featured status and rating
+        const sortedProducts = products.sort((a: any, b: any) => {
+          if (a.is_featured !== b.is_featured) {
+            return b.is_featured ? 1 : -1;
+          }
+          return b.average_rating - a.average_rating;
+        });
+
+        return {
+          subcategory,
+          count: products.length,
+          products: sortedProducts.slice(0, 5) // Top 3-5 products
+        };
+      });
+
+    result.categories = categories;
+    result.allProducts = productsWithRatings; // Paginated products for "View All"
+
+    const categoryGroupingDuration = Date.now() - categoryGroupingStartTime;
+    console.log('🔍 [SERVICE] Category grouping completed:', {
+      duration: `${categoryGroupingDuration}ms`,
+      subcategoriesCount: categories.length,
+      totalProductsGrouped: allProductsWithRatings.length
+    });
+  }
+
+  const totalDuration = Date.now() - startTime;
+  console.log('✅ [SERVICE] globalSearch completed:', {
+    totalDuration: `${totalDuration}ms`,
+    productsReturned: productsWithRatings.length,
+    totalResults: count,
+    page,
+    totalPages: Math.ceil((count || 0) / limit),
+    groupedByCategory: groupByCategory
+  });
+
+  return result;
 }
 
 // Get search suggestions based on query
@@ -255,6 +405,29 @@ export async function getSearchSuggestions(
 
   console.log('💡 [SERVICE] Matching categories:', matchingCategories);
 
+  // Get matching subcategories from database
+  let subcategories: string[] = [];
+  if (query && query.trim() !== '') {
+    const searchTerm = query.trim().toLowerCase();
+    const { data, error } = await supabaseDB
+      .from('products')
+      .select('subcategory')
+      .or(`subcategory.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`)
+      .eq('available', true)
+      .eq('is_visible', true)
+      .not('subcategory', 'is', null);
+
+    if (!error && data) {
+      const uniqueSubcategories = [...new Set(data.map(p => p.subcategory).filter(Boolean))];
+      subcategories = uniqueSubcategories.filter(sub =>
+        sub.toLowerCase().includes(searchTerm) ||
+        searchTerm.includes(sub.toLowerCase())
+      );
+    }
+  }
+
+  console.log('💡 [SERVICE] Matching subcategories:', subcategories);
+
   // Define price ranges for suggestions
   const priceRanges = [
     { label: 'Under ₹500', min: 0, max: 500 },
@@ -266,6 +439,7 @@ export async function getSearchSuggestions(
 
   return {
     categories: matchingCategories,
+    subcategories,
     priceRanges
   };
 }
@@ -273,7 +447,7 @@ export async function getSearchSuggestions(
 // Get autocomplete suggestions
 export async function getAutocompleteSuggestions(query: string, limit: number = 10) {
   const startTime = Date.now();
-  
+
   console.log('💡 [SERVICE] getAutocompleteSuggestions called:', { query, limit });
 
   if (!query || query.trim() === '') {
@@ -287,14 +461,14 @@ export async function getAutocompleteSuggestions(query: string, limit: number = 
   const queryStartTime = Date.now();
   const { data, error } = await supabaseDB
     .from('products')
-    .select('id, title, category, images, rental_price_per_day')
+    .select('id, title, category, subcategory, images, rental_price_per_day')
     .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%,subcategory.ilike.%${searchTerm}%,color.ilike.%${searchTerm}%,secondary_color.ilike.%${searchTerm}%,material.ilike.%${searchTerm}%,condition.ilike.%${searchTerm}%`)
     .eq('available', true)
     .eq('availability_status', 'available')
     .eq('is_visible', true)
     .order('is_featured', { ascending: false })
     .limit(limit);
-  
+
   const queryDuration = Date.now() - queryStartTime;
 
   console.log('💡 [SERVICE] Autocomplete query executed:', {
@@ -316,6 +490,7 @@ export async function getAutocompleteSuggestions(query: string, limit: number = 
     id: product.id,
     title: product.title,
     category: product.category,
+    subcategory: product.subcategory,
     image: product.images?.[0] || null,
     price: product.rental_price_per_day
   })) || [];

@@ -58,7 +58,7 @@ const notificationTemplates: Record<string, Record<string, NotificationTemplate>
       whatsapp: 'Yafora: Hello {{full_name}}, A buyer has requested to rent your product {{product_name}}. Please respond promptly to ensure smooth coordination. Thank you – Team Yafora',
       email: {
         subject: 'You\'ve Got a Booking!',
-        body: 'Hello {{full_name}},\n\nGreat news! Your product, "{{product_name}}", has been rented by a customer. Please prepare it for dispatch.\n\n📅 Rental Date: {{rental_start_date}} to {{rental_end_date}}\n📍 Pickup/Delivery Method: {{delivery_method}}\n💰 Total Amount: ₹{{total_amount}}\n👤 Customer: {{customer_name}}\n📞 Customer Contact: {{customer_phone}}\n\nKeep up the great listings!\n\nCheers,\nThe Yafora Team'
+        body: 'Hello {{full_name}},\n\nGreat news! Your product, "{{product_name}}", has been rented by a customer. Please prepare it for dispatch.\n\n📅 Rental Period: {{rental_start_date}} to {{rental_end_date}}\n📍 Pickup/Delivery Method: {{delivery_method}}\n💰 Total Amount: ₹{{total_amount}}\n👤 Customer: {{customer_name}}\n📞 Customer Contact: {{customer_phone}}\n📍 Delivery Address: {{delivery_address}}\n\n📋 Next Steps:\n• Prepare the item for pickup/delivery\n• Ensure the item is in excellent condition\n• Coordinate with the delivery partner if applicable\n• Contact us if you need any assistance\n\nKeep up the great listings!\n\nCheers,\nThe Yafora Team'
       }
     },
     product_picked_up: {
@@ -130,7 +130,7 @@ const notificationTemplates: Record<string, Record<string, NotificationTemplate>
       whatsapp: 'Yafora: Hello {{full_name}}, Your rental for {{product_name}} is confirmed. Kindly ensure pickup/delivery readiness. Shine on – Team Yafora ✨',
       email: {
         subject: 'Your Rental is Confirmed!',
-        body: 'Hi {{full_name}},\n\nYour rental for "{{product_name}}" has been confirmed!\n\n📅 Rental Period: {{rental_start_date}} to {{rental_end_date}}\n📍 Delivery Address: {{delivery_address}}\n💰 Total Amount: ₹{{total_amount}}\n🔒 Security Deposit: ₹{{security_deposit}}\n👤 Seller: {{seller_name}}\n📞 Seller Contact: {{seller_phone}}\n\nWe hope you shine in your special moment.\n\nWith love,\nYafora Team'
+        body: 'Hi {{full_name}},\n\nYour rental for "{{product_name}}" has been confirmed!\n\n📅 Rental Period: {{rental_start_date}} to {{rental_end_date}}\n📍 Delivery Address: {{delivery_address}}\n💰 Total Amount: ₹{{total_amount}}\n🔒 Security Deposit: ₹{{security_deposit}}\n👤 Seller: {{seller_name}}\n📞 Seller Contact: {{seller_phone}}\n\n📋 Important Information:\n• Please ensure someone is available at the delivery address\n• Keep the item in its original condition for return\n• Contact us immediately if you have any concerns\n\nWe hope you shine in your special moment.\n\nWith love,\nYafora Team'
       }
     },
     product_out_for_delivery: {
@@ -138,7 +138,7 @@ const notificationTemplates: Record<string, Record<string, NotificationTemplate>
       whatsapp: 'Yafora: Hello {{full_name}}, Your rental item {{product_name}} is now out for delivery! Our delivery partner {{partner_name}} will contact you shortly. Please be available at the delivery address. – Team Yafora',
       email: {
         subject: 'Your Rental is Out for Delivery - {{product_name}}',
-        body: 'Hi {{full_name}},\n\nGreat news! Your rental item "{{product_name}}" is now out for delivery.\n\n🚚 Delivery Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Delivery Partner: {{partner_name}}\n- Partner Contact: {{partner_phone}}\n- Expected Delivery: {{expected_delivery_time}}\n- Delivery Address: {{delivery_address}}\n- Seller: {{seller_name}}\n- Seller Contact: {{seller_phone}}\n\nPlease ensure someone is available at the delivery address. Our delivery partner will contact you before arrival.\n\nGet ready to shine!\n\nBest regards,\nYafora Team'
+        body: 'Hi {{full_name}},\n\nGreat news! Your rental item "{{product_name}}" is now out for delivery.\n\n🚚 Delivery Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Delivery Partner: {{partner_name}}\n- Partner Contact: {{partner_phone}}\n- Expected Delivery: {{expected_delivery_time}}\n- Delivery Address: {{delivery_address}}\n- Seller: {{seller_name}}\n- Seller Contact: {{seller_phone}}\n- Rental Period: {{rental_start_date}} to {{rental_end_date}}\n- Total Amount Paid: ₹{{total_amount}}\n\n📋 What to Expect:\n• Our delivery partner will contact you before arrival\n• Please have ID proof ready for verification\n• Inspect the item upon delivery and report any issues immediately\n• Sign the delivery receipt once satisfied\n\nPlease ensure someone is available at the delivery address. Our delivery partner will contact you before arrival.\n\nGet ready to shine!\n\nBest regards,\nYafora Team'
       }
     },
     product_delivered: {
@@ -146,7 +146,7 @@ const notificationTemplates: Record<string, Record<string, NotificationTemplate>
       whatsapp: 'Yafora: Hello {{full_name}}, Your rental item {{product_name}} has been delivered successfully! Enjoy your special moments. Please remember to return it by {{return_date}}. Shine bright! ✨ – Team Yafora',
       email: {
         subject: 'Delivery Confirmed - Enjoy Your Rental!',
-        body: 'Hi {{full_name}},\n\nYour rental item "{{product_name}}" has been successfully delivered!\n\n✨ Rental Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Seller: {{seller_name}}\n- Seller Contact: {{seller_phone}}\n- Rental Period: {{rental_start_date}} to {{rental_end_date}}\n- Return Date: {{return_date}}\n- Delivered By: {{partner_name}}\n- Partner Contact: {{partner_phone}}\n\n📋 Important Reminders:\n• Please take good care of the item during your rental period\n• Return the item in the same condition you received it\n• Late returns will incur additional charges\n• Contact us immediately if you notice any issues\n\nEnjoy your special moments and shine bright!\n\nWith love,\nYafora Team'
+        body: 'Hi {{full_name}},\n\nYour rental item "{{product_name}}" has been successfully delivered!\n\n✨ Rental Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Seller: {{seller_name}}\n- Seller Contact: {{seller_phone}}\n- Rental Period: {{rental_start_date}} to {{rental_end_date}}\n- Return Date: {{return_date}}\n- Delivered By: {{partner_name}}\n- Partner Contact: {{partner_phone}}\n- Delivery Address: {{delivery_address}}\n- Total Amount Paid: ₹{{total_amount}}\n\n📋 Important Reminders:\n• Please take good care of the item during your rental period\n• Return the item in the same condition you received it\n• Late returns will incur additional charges (₹{{late_fee_per_day}} per day)\n• Contact us immediately if you notice any issues\n• Return instructions will be sent closer to the return date\n\nEnjoy your special moments and shine bright!\n\nWith love,\nYafora Team'
       }
     },
     product_ready: {

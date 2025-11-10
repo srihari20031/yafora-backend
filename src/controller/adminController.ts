@@ -130,7 +130,7 @@ export async function updateOrderStatus(req: AuthenticatedRequest, res: Response
     }
 
     const updatedOrder = await AdminService.updateOrderStatus(orderId, status);
-    
+
     // Trigger notifications based on status change
     await NotificationHelpers.handleOrderStatusUpdate(orderId, status, {
       sellerId: updatedOrder.seller_id,
@@ -145,6 +145,39 @@ export async function updateOrderStatus(req: AuthenticatedRequest, res: Response
     res.status(200).json(updatedOrder);
   } catch (error) {
     console.error('Error updating order status:', (error as Error).message);
+    res.status(500).json({ error: (error as Error).message });
+  }
+}
+
+export async function updateOrderPaymentStatus(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { orderId } = req.params;
+    const { status } = req.body;
+    if (!orderId || !status) {
+      res.status(400).json({ error: 'Order ID and status are required' });
+      return;
+    }
+    if (!['pending', 'completed', 'failed', 'refunded'].includes(status)) {
+      res.status(400).json({ error: 'Invalid payment status' });
+      return;
+    }
+
+    const updatedOrder = await AdminService.updateOrderPaymentStatus(orderId, status);
+
+    // If payment status is completed, trigger referral completion
+    if (status === 'completed') {
+      try {
+        const { completeReferralForUser } = await import('../services/userService');
+        await completeReferralForUser(updatedOrder.buyer_id, 'first_purchase');
+        console.log(`Referral completion attempted for buyer ${updatedOrder.buyer_id}`);
+      } catch (referralError) {
+        console.log('No pending referral found or referral completion failed (this is normal for non-referred users):', (referralError as Error).message);
+      }
+    }
+
+    res.status(200).json(updatedOrder);
+  } catch (error) {
+    console.error('Error updating order payment status:', (error as Error).message);
     res.status(500).json({ error: (error as Error).message });
   }
 }
