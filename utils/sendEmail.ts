@@ -27,7 +27,7 @@ function convertTextToHtml(text: string): string {
   return text
     .replace(/\n\n/g, '</p><p>') // Convert double line breaks to paragraphs
     .replace(/\n/g, '<br>') // Convert single line breaks to <br>
-    .replace(/🔗 ([^<\n]+)/g, '<a href="#" style="color: #4F46E5; text-decoration: none; font-weight: 500;">$1</a>') // Convert link placeholders
+    .replace(/🔗 ([^<\n]+)/g, '<a href="#" style="color: #670D2F; text-decoration: none; font-weight: 500;">$1</a>') // Convert link placeholders
     .replace(/^/, '<p>') // Add opening paragraph tag
     .replace(/$/, '</p>'); // Add closing paragraph tag
 }
@@ -83,7 +83,7 @@ function generateEmailTemplate(body: string, templateType: string): string {
   const formattedBody = body
     .replace(/\n\n/g, '</p><p>')
     .replace(/\n/g, '<br>')
-    .replace(/🔗 ([^<\n]+)/g, '<a href="#" style="color: #4F46E5; text-decoration: none; font-weight: 500;">$1</a>');
+    .replace(/🔗 ([^<\n]+)/g, '<a href="#" style="color: #670D2F; text-decoration: none; font-weight: 500;">$1</a>');
 
   return `
     <!DOCTYPE html>
@@ -110,7 +110,7 @@ function generateEmailTemplate(body: string, templateType: string): string {
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
         .header {
-          background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+          background: linear-gradient(135deg, #670D2F 0%, #A53860 100%);
           padding: 40px 24px;
           text-align: center;
         }
@@ -121,7 +121,7 @@ function generateEmailTemplate(body: string, templateType: string): string {
           margin: 0;
         }
         .header-subtitle {
-          color: #E0E7FF;
+          color: #EF88AD;
           font-size: 16px;
           margin: 8px 0 0;
           font-weight: 400;
@@ -150,7 +150,7 @@ function generateEmailTemplate(body: string, templateType: string): string {
         .button {
           display: inline-block;
           padding: 14px 28px;
-          background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+          background: linear-gradient(135deg, #670D2F 0%, #A53860 100%);
           color: #FFFFFF !important;
           text-decoration: none;
           border-radius: 8px;
@@ -183,7 +183,7 @@ function generateEmailTemplate(body: string, templateType: string): string {
           opacity: 1;
         }
         a {
-          color: #4F46E5;
+          color: #670D2F;
           text-decoration: none;
           font-weight: 500;
         }
