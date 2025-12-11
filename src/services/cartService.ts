@@ -4,14 +4,16 @@ interface CartItemUpdate {
   rentalStartDate?: string;
   rentalEndDate?: string;
   tryOnRequested?: boolean;
+  selectedSize?: string;
 }
 
 export async function addToCart(
-  buyerId: string, 
-  productId: string, 
+  buyerId: string,
+  productId: string,
   rentalStartDate?: string | null, // Made optional
   rentalEndDate?: string | null,   // Made optional
-  tryOnRequested: boolean = false
+  tryOnRequested: boolean = false,
+  selectedSize?: string | null
 ) {
   let rentalDurationDays: number | null = null;
   
@@ -47,16 +49,53 @@ export async function addToCart(
     throw new Error('Product is not available for rental');
   }
   
-  // Check if already in cart
-  const { data: existing } = await supabaseDB
+  // Check if already in cart (including expired items)
+  const { data: existingItem, error: findError } = await supabaseDB
     .from('cart')
-    .select('id')
+    .select('*')
     .eq('buyer_id', buyerId)
     .eq('product_id', productId)
-    .single();
-    
-  if (existing) {
-    throw new Error('Product already in cart');
+    .maybeSingle();
+
+  if (findError) {
+    throw new Error(`Failed to check existing cart item: ${findError.message}`);
+  }
+
+  // If exists, update it instead of inserting
+  if (existingItem) {
+    const rentalDurationDays = rentalStartDate && rentalEndDate
+      ? Math.ceil((new Date(rentalEndDate).getTime() - new Date(rentalStartDate).getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    const { data, error } = await supabaseDB
+      .from('cart')
+      .update({
+        rental_start_date: rentalStartDate,
+        rental_end_date: rentalEndDate,
+        rental_duration_days: rentalDurationDays,
+        try_on_requested: tryOnRequested,
+        selected_size: selectedSize,
+        dates_selected: !!(rentalStartDate && rentalEndDate),
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      })
+      .eq('id', existingItem.id)
+      .select(`
+        *,
+        products (
+          id,
+          title,
+          rental_price_per_day,
+          security_deposit_percentage,
+          images
+        )
+      `)
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to update cart item: ${error.message}`);
+    }
+
+    return data;
   }
   
   // Prepare cart item data
@@ -64,6 +103,7 @@ export async function addToCart(
     buyer_id: buyerId,
     product_id: productId,
     try_on_requested: tryOnRequested,
+    selected_size: selectedSize,
     expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
     dates_selected: !!(rentalStartDate && rentalEndDate), // Track if dates are selected
   };
@@ -137,7 +177,30 @@ export async function getUserCart(buyerId: string) {
   if (error) {
     throw new Error(`Failed to fetch cart: ${error.message}`);
   }
-  
+
+  // Automatically invalidate expired rental dates
+  if (data) {
+    for (const item of data) {
+      if (item.rental_start_date && new Date(item.rental_start_date) < new Date()) {
+        await supabaseDB
+          .from('cart')
+          .update({
+            rental_start_date: null,
+            rental_end_date: null,
+            rental_duration_days: null,
+            dates_selected: false,
+          })
+          .eq('id', item.id);
+
+        // Update the item in memory
+        item.rental_start_date = null;
+        item.rental_end_date = null;
+        item.rental_duration_days = null;
+        item.dates_selected = false;
+      }
+    }
+  }
+
   // Calculate totals for each item and overall cart
   const cartItems = data?.map(item => {
     const product = item.products;
@@ -236,7 +299,11 @@ export async function updateCartItem(
   if (updates.tryOnRequested !== undefined) {
     updateData.try_on_requested = updates.tryOnRequested;
   }
-  
+
+  if (updates.selectedSize !== undefined) {
+    updateData.selected_size = updates.selectedSize;
+  }
+
   updateData.updated_at = new Date().toISOString();
   
   const { data, error } = await supabaseDB

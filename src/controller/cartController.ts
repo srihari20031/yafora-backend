@@ -10,7 +10,7 @@ import {
 } from '../services/cartService';
 
 export async function addProductToCart(req: Request, res: Response): Promise<void> {
-  const { buyerId, productId, rentalStartDate, rentalEndDate, tryOnRequested = false } = req.body;
+  const { buyerId, productId, rentalStartDate, rentalEndDate, tryOnRequested = false, selectedSize } = req.body;
 
   console.log('[CartController] Adding product to cart:', {
     buyerId,
@@ -51,11 +51,12 @@ export async function addProductToCart(req: Request, res: Response): Promise<voi
     }
 
     const cartItem = await addToCart(
-      buyerId, 
-      productId, 
+      buyerId,
+      productId,
       rentalStartDate || null, // Pass null if not provided
       rentalEndDate || null,   // Pass null if not provided
-      tryOnRequested
+      tryOnRequested,
+      selectedSize || null
     );
     
     res.status(201).json({ 
@@ -94,7 +95,7 @@ export async function getCart(req: Request, res: Response): Promise<void> {
 
 export async function updateCartItemDetails(req: Request, res: Response): Promise<void> {
   const { buyerId, productId } = req.params;
-  const { rentalStartDate, rentalEndDate, tryOnRequested } = req.body;
+  const { rentalStartDate, rentalEndDate, tryOnRequested, selectedSize } = req.body;
   
   try {
     // If updating dates, check availability
@@ -109,7 +110,8 @@ export async function updateCartItemDetails(req: Request, res: Response): Promis
     const updatedItem = await updateCartItem(buyerId, productId, {
       rentalStartDate,
       rentalEndDate,
-      tryOnRequested
+      tryOnRequested,
+      selectedSize
     });
     
     res.status(200).json({ 
