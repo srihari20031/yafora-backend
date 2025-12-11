@@ -8,6 +8,7 @@ import {
   removeProduct,
   searchProductsHandler,
   getFeaturedProductsHandler,
+  browseProductsHandler,
   uploadMiddleware
 } from "../controller/productController";
 import { authMiddleware } from "../middleware/authMiddlware";
@@ -21,6 +22,7 @@ router.post('/', authMiddleware, uploadMiddleware, addProduct);
 router.get('/search', searchProductsHandler);
 router.get('/featured', getFeaturedProductsHandler);
 router.get('/category/:category', getProductsByCategories);
+router.get('/', browseProductsHandler);
 
 // Generic routes LAST (after specific ones)
 router.get('/:productId', getProduct);

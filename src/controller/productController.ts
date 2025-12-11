@@ -1,15 +1,16 @@
 import { Request, Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/authMiddlware';
 import { v4 as uuidv4 } from 'uuid';
-import { 
-  createProduct,   
-  deleteProduct, 
+import {
+  createProduct,
+  deleteProduct,
   getProductById,
   getSellerProducts,
   searchProducts,
-  getProductsByCategory, 
+  getProductsByCategory,
   updateProduct,
   getFeaturedProducts,
+  browseProducts,
   uploadMultipleImages,
   deleteProductImage
 } from '../services/productService';
@@ -65,7 +66,10 @@ export async function addProduct(req: AuthenticatedRequest, res: Response): Prom
       security_deposit_percentage: Number(productData.security_deposit_percentage),
       weight: productData.weight ? Number(productData.weight) : undefined,
       min_rental_days: Number(productData.min_rental_days),
-      max_rental_days: Number(productData.max_rental_days)
+      max_rental_days: Number(productData.max_rental_days),
+      is_multi_piece: productData.is_multi_piece || false,
+      piece_details: productData.piece_details || null,
+      is_alteration_available: productData.is_alteration_available || false // ADD THIS LINE
     };
     console.log('[ProductController] Final product data for creation:', finalProductData);
 
@@ -103,6 +107,9 @@ export async function editProduct(req: AuthenticatedRequest, res: Response): Pro
     }
     if (productData.try_on_location) {
       productData.try_on_location = JSON.parse(productData.try_on_location);
+    }
+    if (productData.piece_details) {
+      productData.piece_details = JSON.parse(productData.piece_details);
     }
     if (productData.existingImages) {
       productData.existingImages = JSON.parse(productData.existingImages);
@@ -148,7 +155,9 @@ export async function editProduct(req: AuthenticatedRequest, res: Response): Pro
       security_deposit_percentage: Number(productData.security_deposit_percentage),
       weight: productData.weight ? Number(productData.weight) : undefined,
       min_rental_days: Number(productData.min_rental_days),
-      max_rental_days: Number(productData.max_rental_days)
+      max_rental_days: Number(productData.max_rental_days),
+      is_multi_piece: productData.is_multi_piece || false,
+      piece_details: productData.piece_details || null
     };
     console.log('[ProductController] Final product data for update:', finalProductData);
 
@@ -329,7 +338,7 @@ export async function getFeaturedProductsHandler(req: Request, res: Response): P
 
   try {
     const products = await getFeaturedProducts(
-      Number(page), 
+      Number(page),
       Number(limit)
     );
     console.log('[ProductController] Featured products retrieved:', {
@@ -342,6 +351,33 @@ export async function getFeaturedProductsHandler(req: Request, res: Response): P
     res.status(200).json(products);
   } catch (err) {
     console.error('[ProductController] Error in getFeaturedProductsHandler:', {
+      error: (err as Error).message,
+      stack: (err as Error).stack
+    });
+    res.status(400).json({ error: (err as Error).message });
+  }
+}
+
+export async function browseProductsHandler(req: Request, res: Response): Promise<void> {
+  const { category, page = 1, limit = 10 } = req.query;
+  console.log('[ProductController] browseProductsHandler called:', { category, page, limit });
+
+  try {
+    const products = await browseProducts(
+      category as string,
+      Number(page),
+      Number(limit)
+    );
+    console.log('[ProductController] Products browsed:', {
+      productCount: products.products.length,
+      total: products.total,
+      page: products.page,
+      totalPages: products.totalPages
+    });
+
+    res.status(200).json(products);
+  } catch (err) {
+    console.error('[ProductController] Error in browseProductsHandler:', {
       error: (err as Error).message,
       stack: (err as Error).stack
     });

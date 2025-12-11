@@ -1,6 +1,22 @@
 import supabaseDB from "../../config/connectDB";
 
-export interface ProductData {
+export interface PieceDetail {
+  type: string;
+  label: string;
+  size: string;
+  chest?: string;
+  waist?: string;
+  hip?: string;
+  length?: string;
+  shoulder?: string;
+}
+
+export interface ProductPieceDetails {
+  pieces: PieceDetail[];
+}
+
+export interface ProductData { 
+  is_alteration_available?: boolean; // ADD THIS LINE
   seller_id: string;
   title: string;
   category: 'women_wear' | 'men_wear' | 'kids_wear' | 'jewelry' | 'swami_sets' | 'special_occasion' | 'other';
@@ -29,6 +45,8 @@ export interface ProductData {
   waist_size?: string;
   hip_size?: string;
   length?: string;
+  is_multi_piece?: boolean;
+  piece_details?: ProductPieceDetails | null;
 }
 
 export interface ProductFilters {
@@ -158,6 +176,9 @@ export async function getProductById(productId: string) {
     .from('products')
     .select(`
       *,
+      is_multi_piece,
+      piece_details,
+      is_alteration_available,
       profiles!products_seller_id_fkey (
         full_name,
         phone_number,
@@ -181,7 +202,12 @@ export async function getSellerProducts(sellerId: string, page: number = 1, limi
 
   const { data, error, count } = await supabaseDB
     .from('products')
-    .select('*', { count: 'exact' })
+    .select(`
+      *,
+      is_multi_piece,
+      piece_details,
+      is_alteration_available
+    `, { count: 'exact' })
     .eq('seller_id', sellerId)
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
@@ -211,6 +237,8 @@ export async function searchProducts(
     .from('products')
     .select(`
       *,
+      is_multi_piece,
+      piece_details,
       profiles!products_seller_id_fkey (
         full_name,
         pickup_address
@@ -300,6 +328,9 @@ export async function getProductsByCategory(
     .from('products')
     .select(`
       *,
+      is_multi_piece,
+      piece_details,
+      is_alteration_available,
       profiles!products_seller_id_fkey (
         full_name,
         pickup_address
@@ -331,6 +362,9 @@ export async function getFeaturedProducts(page: number = 1, limit: number = 10) 
     .from('products')
     .select(`
       *,
+      is_multi_piece,
+      piece_details,
+      is_alteration_available,
       profiles!products_seller_id_fkey (
         full_name,
         pickup_address
@@ -344,6 +378,49 @@ export async function getFeaturedProducts(page: number = 1, limit: number = 10) 
 
   if (error) {
     throw new Error(`Failed to fetch featured products: ${error.message}`);
+  }
+
+  return {
+    products: data,
+    total: count,
+    page,
+    limit,
+    totalPages: Math.ceil((count || 0) / limit)
+  };
+}
+
+export async function browseProducts(
+  category?: string,
+  page: number = 1,
+  limit: number = 10
+) {
+  const offset = (page - 1) * limit;
+
+  let query = supabaseDB
+    .from('products')
+    .select(`
+      *,
+      is_multi_piece,
+      piece_details,
+      is_alteration_available,
+      profiles!products_seller_id_fkey (
+        full_name,
+        pickup_address
+      )
+    `, { count: 'exact' })
+    .eq('availability_status', 'available')
+    .eq('is_visible', true);
+
+  if (category) {
+    query = query.eq('category', category);
+  }
+
+  const { data, error, count } = await query
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) {
+    throw new Error(`Failed to browse products: ${error.message}`);
   }
 
   return {
