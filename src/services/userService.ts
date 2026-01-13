@@ -347,6 +347,16 @@ export async function signUpUser(
           console.log('🔍 Processing referral for new user:', data.user.id, 'with code:', referralCode.trim());
           await validateAndProcessReferral(referralCode.trim(), data.user.id);
         }
+
+        // Create default notification preferences
+        try {
+          await supabaseDB.from('notification_preferences').insert({
+            user_id: data.user.id,
+          });
+          console.log('✅ Default notification preferences created for user:', data.user.id);
+        } catch (prefsError) {
+          console.warn('⚠️ Failed to create default notification preferences:', (prefsError as Error).message);
+        }
       }
     } catch (profileError) {
       console.error('❌ Profile creation exception:', profileError);

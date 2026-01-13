@@ -4,22 +4,17 @@ export interface PieceDetail {
   type: string;
   label: string;
   size: string;
-  chest?: string;
-  waist?: string;
-  hip?: string;
-  length?: string;
-  shoulder?: string;
 }
 
 export interface ProductPieceDetails {
   pieces: PieceDetail[];
 }
 
-export interface ProductData { 
+export interface ProductData {
   is_alteration_available?: boolean; // ADD THIS LINE
   seller_id: string;
   title: string;
-  category: 'women_wear' | 'men_wear' | 'kids_wear' | 'jewelry' | 'swami_sets' | 'special_occasion' | 'other';
+  category: string;
   subcategory?: string;
   description?: string;
   images: string[];

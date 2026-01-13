@@ -1,5 +1,234 @@
 import supabaseDB from '../../config/connectDB';
 import { sendTemplatedEmail } from '../../utils/sendEmail';
+import {
+  NotificationType,
+  NotificationPriority,
+  NotificationActionType,
+  Notification,
+  NotificationPreferences,
+  NotificationTemplate,
+  CreateNotificationDto,
+  SendNotificationOptions,
+  NotificationTemplateVariables
+} from '../types/notification.types';
+
+// Helper function to get user notification preferences
+export async function getUserPreferences(userId: string): Promise<NotificationPreferences> {
+  const { data: preferences, error } = await supabaseDB
+    .from('notification_preferences')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (error || !preferences) {
+    // Return default preferences if not found
+    return {
+      id: '',
+      user_id: userId,
+      email_enabled: true,
+      whatsapp_enabled: true,
+      push_enabled: true,
+      type_preferences: {
+        order_updates: true,
+        payment_updates: true,
+        delivery_updates: true,
+        product_updates: true,
+        promotional: true,
+        reminders: true,
+        system_announcements: true,
+      },
+      quiet_hours_enabled: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
+
+  return preferences as NotificationPreferences;
+}
+
+// Helper function to check if notification should be sent based on preferences
+export function shouldSendNotification(type: NotificationType, preferences: NotificationPreferences): boolean {
+  const typeMapping: Record<NotificationType, keyof NotificationPreferences['type_preferences']> = {
+    // Order lifecycle
+    order_placed: 'order_updates',
+    order_accepted: 'order_updates',
+    order_cancelled: 'order_updates',
+
+    // Delivery status
+    delivery_assigned: 'delivery_updates',
+    out_for_pickup: 'delivery_updates',
+    item_picked_up: 'delivery_updates',
+    out_for_delivery: 'delivery_updates',
+    item_delivered: 'delivery_updates',
+    return_initiated: 'delivery_updates',
+    item_returned: 'delivery_updates',
+
+    // Payment related
+    payment_received: 'payment_updates',
+    payment_failed: 'payment_updates',
+    refund_processed: 'payment_updates',
+    security_deposit_released: 'payment_updates',
+    security_deposit_deducted: 'payment_updates',
+
+    // Fees and penalties
+    late_fee_applied: 'payment_updates',
+    damage_claim_reported: 'order_updates',
+    damage_claim_approved: 'order_updates',
+    damage_claim_rejected: 'order_updates',
+
+    // Product related
+    product_approved: 'product_updates',
+    product_rejected: 'product_updates',
+    product_review_received: 'product_updates',
+
+    // Cart and wishlist
+    cart_item_expiring: 'reminders',
+    product_available_again: 'product_updates',
+
+    // KYC
+    kyc_approved: 'system_announcements',
+    kyc_rejected: 'system_announcements',
+    kyc_documents_required: 'system_announcements',
+
+    // Promo and referral
+    promo_code_available: 'promotional',
+    referral_reward_earned: 'promotional',
+    referral_signup_complete: 'promotional',
+
+    // Reminders
+    rental_ending_soon: 'reminders',
+    return_reminder: 'reminders',
+    try_on_scheduled: 'reminders',
+
+    // General
+    system_announcement: 'system_announcements',
+    custom: 'system_announcements',
+  };
+
+  const category = typeMapping[type];
+  return preferences.type_preferences[category];
+}
+
+// Helper function to check if current time is within quiet hours
+export function isQuietHours(preferences: NotificationPreferences): boolean {
+  if (!preferences.quiet_hours_enabled || !preferences.quiet_hours_start || !preferences.quiet_hours_end) {
+    return false;
+  }
+
+  const now = new Date();
+  const currentTime = now.getHours() * 60 + now.getMinutes();
+
+  const [startHour, startMin] = preferences.quiet_hours_start.split(':').map(Number);
+  const [endHour, endMin] = preferences.quiet_hours_end.split(':').map(Number);
+
+  const startTime = startHour * 60 + startMin;
+  const endTime = endHour * 60 + endMin;
+
+  if (startTime <= endTime) {
+    // Same day range
+    return currentTime >= startTime && currentTime <= endTime;
+  } else {
+    // Overnight range
+    return currentTime >= startTime || currentTime <= endTime;
+  }
+}
+
+// New sendNotification function for the updated system
+export async function sendNotificationV2(dto: CreateNotificationDto): Promise<Notification> {
+  // Get user preferences
+  const preferences = await getUserPreferences(dto.user_id);
+
+  // Check if notification should be sent
+  if (!shouldSendNotification(dto.type, preferences)) {
+    throw new Error(`Notification type ${dto.type} is disabled in user preferences`);
+  }
+
+  // Check quiet hours
+  if (isQuietHours(preferences)) {
+    // For now, we'll still send but mark as not sent via channels during quiet hours
+    // In future, could queue for later
+  }
+
+  // Insert notification
+  const notificationData = {
+    user_id: dto.user_id,
+    title: dto.title,
+    message: dto.message,
+    type: dto.type,
+    order_id: dto.order_id,
+    product_id: dto.product_id,
+    payment_id: dto.payment_id,
+    metadata: dto.metadata || {},
+    action_type: dto.action_type,
+    action_url: dto.action_url,
+    priority: dto.priority || 'normal',
+    expires_at: dto.expires_at,
+    sent_in_app: true,
+    sent_email: preferences.email_enabled && !isQuietHours(preferences),
+    sent_whatsapp: preferences.whatsapp_enabled && !isQuietHours(preferences),
+  };
+
+  const { data: notification, error } = await supabaseDB
+    .from('notifications')
+    .insert(notificationData)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to create notification: ${error.message}`);
+  }
+
+  // TODO: Actually send email and whatsapp if enabled
+  // For now, just mark as sent
+
+  return notification as Notification;
+}
+
+// New function to send notification from template
+export async function sendNotificationFromTemplate(
+  userId: string,
+  type: NotificationType,
+  variables: NotificationTemplateVariables,
+  options: SendNotificationOptions = {}
+): Promise<Notification> {
+  // Fetch template
+  const { data: template, error: templateError } = await supabaseDB
+    .from('notification_templates')
+    .select('*')
+    .eq('type', type)
+    .eq('is_active', true)
+    .single();
+
+  if (templateError || !template) {
+    throw new Error(`Template not found for type ${type}`);
+  }
+
+  // Replace variables in title and message
+  let title = template.title_template;
+  let message = template.message_template;
+
+  for (const [key, value] of Object.entries(variables)) {
+    const placeholder = `{{${key}}}`;
+    title = title.replace(new RegExp(placeholder, 'g'), String(value));
+    message = message.replace(new RegExp(placeholder, 'g'), String(value));
+  }
+
+  // Create notification DTO
+  const dto: CreateNotificationDto = {
+    user_id: userId,
+    type,
+    title,
+    message,
+    order_id: options.order_id,
+    product_id: options.product_id,
+    payment_id: options.payment_id,
+    priority: template.default_priority,
+    action_type: template.default_action_type,
+    expires_at: options.expires_at,
+  };
+
+  return await sendNotificationV2(dto);
+}
 
 interface Profile {
   id: string;
@@ -18,7 +247,7 @@ interface NotificationProps {
   isTesting?: boolean;
 }
 
-interface NotificationTemplate {
+interface LegacyNotificationTemplate {
   inApp: string;
   whatsapp?: string;
   email?: {
@@ -27,7 +256,7 @@ interface NotificationTemplate {
   };
 }
 
-const notificationTemplates: Record<string, Record<string, NotificationTemplate>> = {
+const notificationTemplates: Record<string, Record<string, LegacyNotificationTemplate>> = {
   seller: {
     account_created: {
       inApp: 'Welcome to Yafora! Your seller account is live.',
@@ -401,7 +630,7 @@ function getEmailTemplateType(eventType: string, role: string): 'kyc' | 'product
 
 export async function sendNotification({ userId, eventType, placeholders = {}, isTesting = false }: NotificationProps): Promise<{ message: string }> {
   console.log(`🔔 Attempting to send notification: userId=${userId}, eventType=${eventType}, isTesting=${isTesting}`);
-  
+
   // Fetch user profile
   const { data: profile, error: profileError } = await supabaseDB
     .from('profiles')
@@ -424,7 +653,7 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
   if (placeholders.order_id) {
     try {
       const order = await fetchCompleteOrderData(placeholders.order_id);
-      
+
       // Fetch buyer, seller, and product details
       const [buyer, seller, product] = await Promise.all([
         fetchUserProfile(order.buyer_id),
@@ -445,21 +674,21 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
         product_name: product.title,
         product_category: product.category,
         rental_price_per_day: product.rental_price_per_day.toString(),
-        
+
         // Buyer details
         customer_name: buyer.full_name || 'Customer',
         customer_phone: buyer.phone_number || 'Not provided',
         buyer_name: buyer.full_name || 'Buyer',
         buyer_phone: buyer.phone_number || 'Not provided',
-        
+
         // Seller details
         seller_name: seller.full_name || 'Seller',
         seller_phone: seller.phone_number || 'Not provided',
-        
+
         // Delivery partner details
         partner_name: deliveryPartner?.full_name || 'Partner not assigned',
         partner_phone: deliveryPartner?.phone_number || 'Not available',
-        
+
         // Order details
         total_amount: order.total_amount.toString(),
         security_deposit: order.security_deposit.toString(),
@@ -468,20 +697,20 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
         return_date: formatDate(order.expected_return_date),
         expected_return_date: formatDate(order.expected_return_date),
         actual_return_date: order.actual_return_date ? formatDate(order.actual_return_date) : 'Not returned yet',
-        
+
         // Address details
         pickup_address: formatAddress(order.pickup_address),
         delivery_address: formatAddress(order.delivery_address),
-        
+
         // Fees and amounts
         late_fee: order.late_fee?.toString() || '0',
         late_fee_amount: order.late_fee?.toString() || '0',
         damage_fee: order.damage_fee?.toString() || '0',
         refund_amount: order.security_deposit_refunded_amount?.toString() || '0',
-        
+
         // Calculate payout amount (total_amount - platform_commission if applicable)
         payout_amount: (order.total_amount * 0.85).toString(), // Assuming 15% platform commission
-        
+
         // Status and timing
         delivery_status: order.delivery_status,
         order_status: order.order_status,
@@ -489,7 +718,7 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
         delivery_time: new Date().toLocaleString('en-IN'),
         expected_delivery_time: 'within 2-4 hours',
         updated_at: new Date().toLocaleString('en-IN'),
-        
+
         // Additional details
         delivery_method: 'Door-to-door delivery',
         late_fee_per_day: '50' // This should be configurable
@@ -569,9 +798,13 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
     .insert({
       user_id: userId,
       type: eventType,
+      title: inAppMessage,
       message: inAppMessage,
-      read: false,
-      created_at: new Date().toISOString()
+      priority: 'normal',
+      sent_in_app: true,
+      sent_email: email_notifications,
+      sent_whatsapp: whatsapp_notifications,
+      read: false
     });
 
   if (notificationError) {
@@ -585,10 +818,10 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
   if (email_notifications && email && emailMessage && !isTesting) {
     try {
       console.log(`📧 Attempting to send email to ${email} with subject: "${emailMessage.subject}"`);
-      
+
       const templateType = getEmailTemplateType(eventType, role);
       await sendTemplatedEmail(email, emailMessage.subject, emailMessage.body, templateType);
-      
+
       console.log(`✅ Email sent successfully to ${email} for event: ${eventType}`);
     } catch (err) {
       console.error(`❌ Failed to send email notification to ${email}:`, err);
@@ -604,14 +837,14 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
 
   // Handle Admin notifications for relevant events
   const adminNotificationEvents = [
-    'kyc_approved', 'kyc_rejected', 'new_user_registered', 'product_listed', 
+    'kyc_approved', 'kyc_rejected', 'new_user_registered', 'product_listed',
     'rental_order_placed', 'product_returned_damaged', 'late_return', 'refund_payout_released',
     'delivery_partner_assigned', 'delivery_status_updated', 'product_picked_up', 'product_delivered'
   ];
 
   if (adminNotificationEvents.includes(eventType)) {
     console.log(`👑 Event ${eventType} requires admin notification`);
-    
+
     const { data: admins, error: adminError } = await supabaseDB
       .from('profiles')
       .select('id, email, email_notifications, full_name')
@@ -621,7 +854,7 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
       console.error(`❌ Failed to fetch admins:`, adminError.message);
     } else {
       console.log(`👑 Found ${admins.length} admin(s) to notify`);
-      
+
       for (const admin of admins) {
         const adminTemplate = notificationTemplates.admin[eventType];
         if (!adminTemplate) continue;
@@ -633,9 +866,13 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
           .insert({
             user_id: admin.id,
             type: eventType,
+            title: adminMessage,
             message: adminMessage,
-            read: false,
-            created_at: new Date().toISOString()
+            priority: 'normal',
+            sent_in_app: true,
+            sent_email: admin.email_notifications,
+            sent_whatsapp: false,
+            read: false
           });
 
         if (adminNotificationError) {
@@ -647,14 +884,14 @@ export async function sendNotification({ userId, eventType, placeholders = {}, i
         if (admin.email_notifications && admin.email && adminTemplate.email && !isTesting) {
           try {
             console.log(`📧 Sending admin email to ${admin.email}`);
-            
+
             await sendTemplatedEmail(
               admin.email,
               replacePlaceholders(adminTemplate.email.subject, updatedPlaceholders),
               replacePlaceholders(adminTemplate.email.body, updatedPlaceholders),
               'admin'
             );
-            
+
             console.log(`✅ Admin email sent successfully to ${admin.email} for event: ${eventType}`);
           } catch (err) {
             console.error(`❌ Failed to send admin email to ${admin.email}:`, err);

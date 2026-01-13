@@ -1,4 +1,4 @@
-import { sendBulkNotification, sendNotification } from "../src/services/notificationService";
+import { sendBulkNotification, sendNotification, sendNotificationFromTemplate } from "../src/services/notificationService";
 
 export class NotificationTriggers {
   // User Registration & KYC Related
@@ -13,11 +13,7 @@ export class NotificationTriggers {
 
   static async triggerKYCApproved(userId: string, role: 'seller' | 'buyer' | 'delivery_partner') {
     console.log(`Triggering kyc_approved notification for user ${userId} with role ${role}`);
-    return await sendNotification({
-      userId,
-      eventType: 'kyc_approved',
-      placeholders: { role }
-    });
+    return await sendNotificationFromTemplate(userId, 'kyc_approved', { role });
   }
 
   // Product Related
@@ -60,15 +56,11 @@ export class NotificationTriggers {
 
   static async triggerProductReturned(sellerId: string, productName: string, orderId: string, amount: string) {
     console.log(`Triggering product_returned notification for seller ${sellerId} for product ${productName} with order ${orderId}`);
-    return await sendNotification({
-      userId: sellerId,
-      eventType: 'product_returned',
-      placeholders: { 
-        product_name: productName,
-        order_id: orderId,
-        amount: amount
-      }
-    });
+    return await sendNotificationFromTemplate(sellerId, 'item_returned', {
+      product_name: productName,
+      order_id: orderId,
+      amount: amount
+    }, { order_id: orderId });
   }
 
   // Late Return & Damage
@@ -89,56 +81,36 @@ export class NotificationTriggers {
 
   static async triggerLateFeeApplied(buyerId: string, productName: string, amount: string) {
     console.log(`Triggering late_fee_applied notification for buyer ${buyerId} for product ${productName}`);
-    return await sendNotification({
-      userId: buyerId,
-      eventType: 'late_fee_applied',
-      placeholders: { 
-        product_name: productName,
-        amount: amount
-      }
+    return await sendNotificationFromTemplate(buyerId, 'late_fee_applied', {
+      product_name: productName,
+      amount: amount
     });
   }
 
   // Security Deposit & Refunds
   static async triggerSecurityDepositRefunded(sellerId: string, productName: string) {
     console.log(`Triggering security_deposit_refunded notification for seller ${sellerId} for product ${productName}`);
-    return await sendNotification({
-      userId: sellerId,
-      eventType: 'security_deposit_refunded',
-      placeholders: { product_name: productName }
-    });
+    return await sendNotificationFromTemplate(sellerId, 'security_deposit_released', { product_name: productName });
   }
 
   static async triggerRefundProcessed(buyerId: string, productName: string) {
     console.log(`Triggering refund_processed notification for buyer ${buyerId} for product ${productName}`);
-    return await sendNotification({
-      userId: buyerId,
-      eventType: 'refund_processed',
-      placeholders: { product_name: productName }
-    });
+    return await sendNotificationFromTemplate(buyerId, 'security_deposit_released', { product_name: productName });
   }
 
   // Payout Related
   static async triggerPayoutSent(sellerId: string, amount: string, productName: string) {
     console.log(`Triggering payout_sent notification for seller ${sellerId} for product ${productName}`);
-    return await sendNotification({
-      userId: sellerId,
-      eventType: 'payout_sent',
-      placeholders: { 
-        amount: amount,
-        product_name: productName
-      }
+    return await sendNotificationFromTemplate(sellerId, 'payment_received', {
+      amount: amount,
+      product_name: productName
     });
   }
 
   // Reviews
   static async triggerReviewReceived(sellerId: string, productName: string) {
     console.log(`Triggering review_received notification for seller ${sellerId} for product ${productName}`);
-    return await sendNotification({
-      userId: sellerId,
-      eventType: 'review_received',
-      placeholders: { product_name: productName }
-    });
+    return await sendNotificationFromTemplate(sellerId, 'product_review_received', { product_name: productName });
   }
 
   static async triggerReviewRequest(buyerId: string, productName: string) {
@@ -164,18 +136,10 @@ export class NotificationTriggers {
   static async triggerDamageReported(sellerId: string, buyerId: string, productName: string, orderId: string) {
     console.log(`Triggering damage_reported notification for seller ${sellerId} and damage_claim for buyer ${buyerId} for product ${productName} with order ${orderId}`);
     // Notify seller
-    await sendNotification({
-      userId: sellerId,
-      eventType: 'damage_reported',
-      placeholders: { product_name: productName }
-    });
+    await sendNotificationFromTemplate(sellerId, 'damage_claim_reported', { product_name: productName }, { order_id: orderId });
 
     // Notify buyer
-    await sendNotification({
-      userId: buyerId,
-      eventType: 'damage_claim',
-      placeholders: { product_name: productName }
-    });
+    await sendNotificationFromTemplate(buyerId, 'damage_claim_reported', { product_name: productName }, { order_id: orderId });
 
     // Admins will be notified automatically
   }
@@ -243,13 +207,9 @@ export class NotificationTriggers {
   // Reminder notifications
   static async triggerReturnReminder(buyerId: string, productName: string, dueDate: string) {
     console.log(`Triggering return_reminder notification for buyer ${buyerId} for product ${productName} due on ${dueDate}`);
-    return await sendNotification({
-      userId: buyerId,
-      eventType: 'return_reminder',
-      placeholders: { 
-        product_name: productName,
-        date: dueDate
-      }
+    return await sendNotificationFromTemplate(buyerId, 'return_reminder', {
+      product_name: productName,
+      return_date: dueDate
     });
   }
 }

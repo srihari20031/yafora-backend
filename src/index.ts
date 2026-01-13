@@ -13,6 +13,7 @@ import promotionRoutes from './routes/promoCodeAndReferralRouter'
 import adminDashboardRoutes from './routes/adminDashboardRouter';
 import deliveryRotues from './routes/deliveryRouter';
 import searchRoutes from "./routes/searchRouter"
+import notificationRoutes from './routes/notificationRoutes';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
@@ -157,6 +158,7 @@ app.use('/api/promotions', promotionRoutes)
 app.use('/api/admin-dashboard', adminDashboardRoutes);
 app.use('/api/delivery', deliveryRotues);
 app.use('/api/search', searchRoutes)
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/', (req, res) => {
   res.send('Welcome to the API'); 
