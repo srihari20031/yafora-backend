@@ -52,6 +52,10 @@ export function shouldSendNotification(type: NotificationType, preferences: Noti
     // Order lifecycle
     order_placed: 'order_updates',
     order_accepted: 'order_updates',
+    order_pending_seller_confirmation: 'order_updates',
+    order_confirmed: 'order_updates',
+    order_rejected_by_seller: 'order_updates',
+    order_auto_confirmed: 'order_updates',
     order_cancelled: 'order_updates',
 
     // Delivery status
@@ -282,7 +286,7 @@ const notificationTemplates: Record<string, Record<string, LegacyNotificationTem
         body: 'Dear {{full_name}},\n\nYour product, {{product_name}}, is now live and available for rental. Thank you for enriching our collection.\n\nLet us know if you need help attracting more visibility.\n\nElegant regards,\nTeam Yafora'
       }
     },
-    product_booked: {
+    order_accepted: {
       inApp: 'You have a new rental request for {{product_name}}.',
       whatsapp: 'Yafora: Hello {{full_name}}, A buyer has requested to rent your product {{product_name}}. Please respond promptly to ensure smooth coordination. Thank you – Team Yafora',
       email: {
@@ -354,12 +358,12 @@ const notificationTemplates: Record<string, Record<string, LegacyNotificationTem
         body: 'Hello {{full_name}},\n\nYour KYC verification is complete! You\'re now ready to explore and rent stunning costumes and jewelry on Yafora.\n\nStart browsing:\n🔗 Explore Now\n\nShine on!\nBest,\nYafora Team'
       }
     },
-    rental_confirmed: {
+    order_placed: {
       inApp: 'Your rental for {{product_name}} is confirmed.',
       whatsapp: 'Yafora: Hello {{full_name}}, Your rental for {{product_name}} is confirmed. Kindly ensure pickup/delivery readiness. Shine on – Team Yafora ✨',
       email: {
         subject: 'Your Rental is Confirmed!',
-        body: 'Hi {{full_name}},\n\nYour rental for "{{product_name}}" has been confirmed!\n\n📅 Rental Period: {{rental_start_date}} to {{rental_end_date}}\n📍 Delivery Address: {{delivery_address}}\n💰 Total Amount: ₹{{total_amount}}\n🔒 Security Deposit: ₹{{security_deposit}}\n👤 Seller: {{seller_name}}\n📞 Seller Contact: {{seller_phone}}\n\n📋 Important Information:\n• Please ensure someone is available at the delivery address\n• Keep the item in its original condition for return\n• Contact us immediately if you have any concerns\n\nWe hope you shine in your special moment.\n\nWith love,\nYafora Team'
+        body: 'Hi {{full_name}},\n\nYour rental for "{{product_name}}" has been confirmed!\n\n📅 Rental Period: {{rental_start_date}} to {{rental_end_date}}\n📍 Delivery Address: {{delivery_address}}\n💰 Total Amount: ₹{{total_amount}}\n🔒 Security Deposit: ₹{{security_deposit}}\n\n📋 Important Information:\n• Please ensure someone is available at the delivery address\n• Keep the item in its original condition for return\n• Contact us immediately if you have any concerns\n\nWe hope you shine in your special moment.\n\nWith love,\nYafora Team'
       }
     },
     product_out_for_delivery: {
@@ -1156,7 +1160,7 @@ export async function sendOrderNotification(
     const notificationTargets: { userId: string; eventType: string }[] = [];
 
     switch (eventType) {
-      case 'rental_confirmed':
+      case 'order_placed':
       case 'product_ready':
       case 'return_reminder':
       case 'late_fee_applied':
@@ -1164,7 +1168,7 @@ export async function sendOrderNotification(
         notificationTargets.push({ userId: order.buyer_id, eventType });
         break;
 
-      case 'product_booked':
+      case 'order_accepted':
       case 'product_returned':
       case 'late_return':
       case 'security_deposit_refunded':

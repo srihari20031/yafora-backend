@@ -27,11 +27,11 @@ export class NotificationTriggers {
   }
 
   static async triggerProductBooked(sellerId: string, productName: string, buyerName: string, rentalDate: string, deliveryMethod: string) {
-    console.log(`Triggering product_booked notification for seller ${sellerId} for product ${productName}`);
+    console.log(`Triggering order_accepted notification for seller ${sellerId} for product ${productName}`);
     return await sendNotification({
       userId: sellerId,
-      eventType: 'product_booked',
-      placeholders: { 
+      eventType: 'order_accepted',
+      placeholders: {
         product_name: productName,
         buyer_name: buyerName,
         rental_date: rentalDate,
@@ -41,15 +41,57 @@ export class NotificationTriggers {
   }
 
   // Rental Related
-  static async triggerRentalConfirmed(buyerId: string, productName: string, rentalPeriod: string, pickupLocation: string) {
-    console.log(`Triggering rental_confirmed notification for buyer ${buyerId} for product ${productName}`);
+  static async triggerRentalConfirmed(buyerId: string, productName: string, rentalPeriod: string, pickupLocation: string, orderId?: string) {
+    console.log(`Triggering order_placed notification for buyer ${buyerId} for product ${productName}`);
+    const placeholders: Record<string, string> = {
+      product_name: productName,
+      rental_period: rentalPeriod,
+      pickup_location: pickupLocation
+    };
+    if (orderId) {
+      placeholders.order_id = orderId;
+    }
     return await sendNotification({
       userId: buyerId,
-      eventType: 'rental_confirmed',
-      placeholders: { 
-        product_name: productName,
-        rental_period: rentalPeriod,
-        pickup_location: pickupLocation
+      eventType: 'order_placed',
+      placeholders
+    });
+  }
+
+  // NEW: Seller Confirmation System
+  static async triggerOrderPendingConfirmation(order: any) {
+    console.log(`Triggering order_pending_seller_confirmation notification for seller ${order.seller_id}`);
+    return await sendNotification({
+      userId: order.seller_id,
+      eventType: 'order_pending_seller_confirmation',
+      placeholders: {
+        product_name: order.products?.title || 'Product',
+        order_id: order.id
+      }
+    });
+  }
+
+  static async triggerOrderConfirmed(order: any) {
+    console.log(`Triggering order_confirmed notification for buyer ${order.buyer_id}`);
+    return await sendNotification({
+      userId: order.buyer_id,
+      eventType: 'order_confirmed',
+      placeholders: {
+        product_name: order.products?.title || 'Product',
+        order_id: order.id
+      }
+    });
+  }
+
+  static async triggerOrderRejected(order: any, reason: string) {
+    console.log(`Triggering order_rejected_by_seller notification for buyer ${order.buyer_id}`);
+    return await sendNotification({
+      userId: order.buyer_id,
+      eventType: 'order_rejected_by_seller',
+      placeholders: {
+        product_name: order.products?.title || 'Product',
+        order_id: order.id,
+        reason: reason
       }
     });
   }

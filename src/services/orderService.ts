@@ -132,7 +132,9 @@ export async function createRental(rentalData: CreateRentalData) {
             expected_return_date: rentalData.rental_end_date,
             delivery_status: 'pending',
             payment_status: 'pending',
-            order_status: 'upcoming',
+            order_status: 'pending_seller_confirmation',
+            seller_confirmation_status: 'pending',
+            confirmation_grace_period_ends_at: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes from now
             promo_code_id: rentalData.promoCodeId,
             discount_amount: rentalData.discountAmount || 0,
             commission_amount: rentalData.commissionAmount || 0,
@@ -224,6 +226,68 @@ export async function updateRental(rentalId: string, updateData: UpdateRentalDat
 
     return data;
 }
+
+export const confirmOrder = async (orderId: string) => {
+  const { data, error } = await supabaseDB
+    .from('orders')
+    .update({
+      order_status: 'confirmed',
+      seller_confirmation_status: 'accepted',
+      seller_confirmed_at: new Date().toISOString()
+    })
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const getBuyerOrders = async (buyerId: string, status?: string) => {
+  let query = supabaseDB
+    .from('orders')
+    .select('*, products(*), profiles!seller_id(*)')
+    .eq('buyer_id', buyerId);
+
+  if (status && status !== 'all') {
+    query = query.eq('order_status', status);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+};
+
+// Add method to get orders pending confirmation for buyer
+export const getBuyerPendingConfirmationOrders = async (buyerId: string) => {
+  const { data, error } = await supabaseDB
+    .from('orders')
+    .select('*, products(*), profiles!seller_id(*)')
+    .eq('buyer_id', buyerId)
+    .eq('order_status', 'pending_seller_confirmation')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+};
+
+export const rejectOrder = async (orderId: string, reason: string) => {
+  const { data, error } = await supabaseDB
+    .from('orders')
+    .update({
+      order_status: 'rejected',
+      seller_confirmation_status: 'rejected',
+      seller_rejection_reason: reason,
+      seller_confirmed_at: new Date().toISOString()
+    })
+    .eq('id', orderId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
 
 export async function updateDeliveryStatus(rentalId: string, status: string, deliveryPartnerId?: string) {
     const updates: any = { delivery_status: status };

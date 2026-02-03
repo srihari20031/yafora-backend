@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { AuthenticatedRequest } from '../middleware/authMiddlware';
 import {
   getSellerOrders,
   updateSellerOrderDeliveryStatus,
@@ -6,7 +7,10 @@ import {
   reportSellerOrderDamage as reportSellerOrderDamageService,
   cancelSellerOrder as cancelSellerOrderService,
   getSellerTotalTransactions,
-  getSellerReviews
+  getSellerReviews,
+  acceptSellerOrder,
+  rejectSellerOrder,
+  getSellerPendingOrders
 } from '../services/sellerOrderService';
 
 export async function getSellerOrdersList(req: Request, res: Response): Promise<void> {
@@ -107,8 +111,117 @@ export async function getSellerReviewsList(req: Request, res: Response): Promise
     );
     res.status(200).json(result);
   } catch (err) {
-    res.status(400).json({ 
-      error: (err as Error).message 
+    res.status(400).json({
+      error: (err as Error).message
     });
   }
 }
+
+export const acceptOrder = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { orderId } = req.params;
+    const sellerId = req.user?.id; // Assuming you have auth middleware
+
+    if (!sellerId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const order = await acceptSellerOrder(orderId, sellerId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Order confirmed successfully',
+      data: order
+    });
+  } catch (error: any) {
+    console.error('Error accepting order:', error);
+    res.status(400).json({
+      success: false,
+      error: error.message || 'Failed to accept order'
+    });
+  }
+};
+
+export const rejectOrder = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { orderId } = req.params;
+    const { reason } = req.body;
+    const sellerId = req.user?.id;
+
+    if (!sellerId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    if (!reason || reason.trim() === '') {
+      res.status(400).json({ error: 'Rejection reason is required' });
+      return;
+    }
+
+    const order = await rejectSellerOrder(orderId, sellerId, reason);
+
+    res.status(200).json({
+      success: true,
+      message: 'Order rejected successfully',
+      data: order
+    });
+  } catch (error: any) {
+    console.error('Error rejecting order:', error);
+    res.status(400).json({
+      success: false,
+      error: error.message || 'Failed to reject order'
+    });
+  }
+};
+
+export const getPendingOrders = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const sellerId = req.user?.id;
+
+    if (!sellerId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const orders = await getSellerPendingOrders(sellerId);
+
+    res.status(200).json({
+      success: true,
+      data: orders,
+      count: orders.length
+    });
+  } catch (error: any) {
+    console.error('Error fetching pending orders:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch pending orders'
+    });
+  }
+};
+
+export const getOrders = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const sellerId = req.user?.id;
+    const { status } = req.query;
+
+    if (!sellerId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const orders = await getSellerOrders(sellerId, 1, 50, status as string);
+
+    res.status(200).json({
+      success: true,
+      data: orders.rentals,
+      count: orders.total
+    });
+  } catch (error: any) {
+    console.error('Error fetching orders:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to fetch orders'
+    });
+  }
+};

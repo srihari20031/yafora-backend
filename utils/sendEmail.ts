@@ -190,6 +190,12 @@ function generateEmailTemplate(body: string, templateType: string): string {
         a:hover {
           text-decoration: underline;
         }
+        .button-container {
+          display: flex;
+          gap: 12px;
+          justify-content: center;
+          flex-wrap: wrap;
+        }
         @media (max-width: 640px) {
           .container {
             margin: 10px;
@@ -205,6 +211,11 @@ function generateEmailTemplate(body: string, templateType: string): string {
             display: block;
             text-align: center;
             width: 100%;
+            margin: 8px 0;
+          }
+          .button-container {
+            flex-direction: column;
+            gap: 8px;
           }
         }
       </style>
@@ -221,7 +232,7 @@ function generateEmailTemplate(body: string, templateType: string): string {
         <div class="content">
           <h2>Reservation Confirmed 🎉</h2>
           <div class="highlight-box">${formattedBody}</div>
-          <a href="https://shop.yafora.com" class="button">Visit Yafora</a>
+          <a href="https://rent.yafora.co" class="button">Visit Yafora</a>
         </div>
         
         <div class="footer">

@@ -90,37 +90,8 @@ export async function createNewRental(req: Request, res: Response): Promise<void
                 rentalDate,
                 deliveryMethod);
                 
-            // Notify seller about new booking
-            await NotificationTriggers.triggerProductBooked(
-                actualSellerId,
-                productName,
-                buyerName,
-                rentalDate,
-                deliveryMethod
-            );
-
-            // Notify buyer about rental confirmation
-            await NotificationTriggers.triggerRentalConfirmed(
-                buyer_id,
-                productName,
-                rentalPeriod,
-                pickupLocation
-            );
-
-            // Notify admins about new rental order
-            await NotificationHelpers.handleOrderStatusUpdate(
-                rental.id,
-                'confirmed',
-                {
-                    sellerId: actualSellerId,
-                    buyerId: buyer_id,
-                    productName,
-                    buyerName,
-                    rentalDate,
-                    deliveryMethod,
-                    amount: total_amount.toString()
-                }
-            );
+            // Notify seller about new order pending confirmation
+            await NotificationTriggers.triggerOrderPendingConfirmation(rental);
 
             console.log('Notifications sent successfully for rental creation');
         } catch (notificationError) {

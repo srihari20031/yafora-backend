@@ -42,6 +42,8 @@ export interface ProductData {
   length?: string;
   is_multi_piece?: boolean;
   piece_details?: ProductPieceDetails | null;
+  target_gender?: 'women' | 'men' | 'unisex' | 'both';
+  fit_notes?: string;
 }
 
 export interface ProductFilters {
@@ -174,6 +176,8 @@ export async function getProductById(productId: string) {
       is_multi_piece,
       piece_details,
       is_alteration_available,
+      target_gender,
+      fit_notes,
       profiles!products_seller_id_fkey (
         full_name,
         phone_number,
@@ -201,7 +205,9 @@ export async function getSellerProducts(sellerId: string, page: number = 1, limi
       *,
       is_multi_piece,
       piece_details,
-      is_alteration_available
+      is_alteration_available,
+      target_gender,
+      fit_notes
     `, { count: 'exact' })
     .eq('seller_id', sellerId)
     .order('created_at', { ascending: false })
@@ -234,6 +240,8 @@ export async function searchProducts(
       *,
       is_multi_piece,
       piece_details,
+      target_gender,
+      fit_notes,
       profiles!products_seller_id_fkey (
         full_name,
         pickup_address
@@ -326,6 +334,8 @@ export async function getProductsByCategory(
       is_multi_piece,
       piece_details,
       is_alteration_available,
+      target_gender,
+      fit_notes,
       profiles!products_seller_id_fkey (
         full_name,
         pickup_address
@@ -360,6 +370,8 @@ export async function getFeaturedProducts(page: number = 1, limit: number = 10) 
       is_multi_piece,
       piece_details,
       is_alteration_available,
+      target_gender,
+      fit_notes,
       profiles!products_seller_id_fkey (
         full_name,
         pickup_address
@@ -398,6 +410,8 @@ export async function browseProducts(
       is_multi_piece,
       piece_details,
       is_alteration_available,
+      target_gender,
+      fit_notes,
       profiles!products_seller_id_fkey (
         full_name,
         pickup_address

@@ -4,6 +4,10 @@ export type NotificationType =
   // Order lifecycle
   | 'order_placed'
   | 'order_accepted'
+  | 'order_pending_seller_confirmation' // NEW
+  | 'order_confirmed' // NEW
+  | 'order_rejected_by_seller' // NEW
+  | 'order_auto_confirmed' // NEW
   | 'order_cancelled'
 
   // Delivery status

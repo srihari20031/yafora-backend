@@ -1,16 +1,24 @@
 import supabaseDB from "../../config/connectDB";
+import { confirmOrder, rejectOrder } from './orderService';
+import { NotificationTriggers } from '../../utils/notificationTriggers';
 
-export async function getSellerOrders(sellerId: string, page: number = 1, limit: number = 10) {
+export async function getSellerOrders(sellerId: string, page: number = 1, limit: number = 10, status?: string) {
   const offset = (page - 1) * limit;
 
-  const { data, error, count } = await supabaseDB
+  let query = supabaseDB
     .from('orders')
     .select(`
       *,
       products (*),
       buyer:profiles!orders_buyer_id_fkey (id, full_name, email, phone_number)
     `, { count: 'exact' })
-    .eq('seller_id', sellerId)
+    .eq('seller_id', sellerId);
+
+  if (status && status !== 'all') {
+    query = query.eq('order_status', status);
+  }
+
+  const { data, error, count } = await query
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -336,3 +344,74 @@ export async function getSellerReviews(sellerId: string, page: number = 1, limit
     totalPages
   };
 }
+
+export const acceptSellerOrder = async (orderId: string, sellerId: string) => {
+  // Verify seller owns this order
+  const { data: order, error: fetchError } = await supabaseDB
+    .from('orders')
+    .select('*, products(title), profiles!buyer_id(full_name, email)')
+    .eq('id', orderId)
+    .eq('seller_id', sellerId)
+    .single();
+
+  if (fetchError || !order) {
+    throw new Error('Order not found or you do not have permission');
+  }
+
+  if (order.seller_confirmation_status !== 'pending') {
+    throw new Error('Order has already been confirmed or rejected');
+  }
+
+  // Confirm the order
+  const confirmedOrder = await confirmOrder(orderId);
+
+  // Send notification to buyer
+  await NotificationTriggers.triggerOrderConfirmed(confirmedOrder);
+
+  return confirmedOrder;
+};
+
+export const rejectSellerOrder = async (
+  orderId: string,
+  sellerId: string,
+  reason: string
+) => {
+  // Verify seller owns this order
+  const { data: order, error: fetchError } = await supabaseDB
+    .from('orders')
+    .select('*, products(title), profiles!buyer_id(full_name, email)')
+    .eq('id', orderId)
+    .eq('seller_id', sellerId)
+    .single();
+
+  if (fetchError || !order) {
+    throw new Error('Order not found or you do not have permission');
+  }
+
+  if (order.seller_confirmation_status !== 'pending') {
+    throw new Error('Order has already been confirmed or rejected');
+  }
+
+  // Reject the order
+  const rejectedOrder = await rejectOrder(orderId, reason);
+
+  // Send notification to buyer
+  await NotificationTriggers.triggerOrderRejected(rejectedOrder, reason);
+
+  // TODO: Trigger refund process here
+  // await processRefund(order.id, order.total_amount);
+
+  return rejectedOrder;
+};
+
+export const getSellerPendingOrders = async (sellerId: string) => {
+  const { data, error } = await supabaseDB
+    .from('orders')
+    .select('*, products(*), profiles!buyer_id(*)')
+    .eq('seller_id', sellerId)
+    .eq('seller_confirmation_status', 'pending')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+};

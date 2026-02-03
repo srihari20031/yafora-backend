@@ -33,6 +33,8 @@ export interface Product {
   is_multi_piece: boolean;
   piece_details: ProductPieceDetails | null;
   is_alteration_available?: boolean; // ADD THIS LINE
+  target_gender?: 'women' | 'men' | 'unisex' | 'both';
+  fit_notes?: string;
   created_at?: string;
   updated_at?: string;
 }
