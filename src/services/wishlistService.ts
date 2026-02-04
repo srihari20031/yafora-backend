@@ -31,6 +31,18 @@ export async function addToWishlist(buyerId: string, productId: string) {
 }
 
 export async function removeFromWishlist(buyerId: string, productId: string) {
+  // First check if the item exists in wishlist
+  const { data: existing } = await supabaseDB
+    .from('favorites')
+    .select('id')
+    .eq('buyer_id', buyerId)
+    .eq('product_id', productId)
+    .single();
+
+  if (!existing) {
+    throw new Error('Product not found in wishlist');
+  }
+
   const { error } = await supabaseDB
     .from('favorites')
     .delete()
