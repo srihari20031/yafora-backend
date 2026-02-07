@@ -1,49 +1,82 @@
 import supabaseDB from "../../config/connectDB";
 
 export interface PieceDetail {
-  type: string;
+  piece_type: string;
   label: string;
   size: string;
+  gender_fit?: string;
+  measurements?: Record<string, string>;
 }
 
 export interface ProductPieceDetails {
   pieces: PieceDetail[];
 }
 
+export interface SellerAcknowledgements {
+  ownership_accuracy: boolean;
+  condition_hygiene: boolean;
+  policy_agreement: boolean;
+  acknowledged_at?: string;
+}
+
 export interface ProductData {
-  is_alteration_available?: boolean; // ADD THIS LINE
-  seller_id: string;
+  id?: string;
+  seller_id?: string;
   title: string;
-  category: string;
-  subcategory?: string;
-  description?: string;
-  images: string[];
+  category: 'Women' | 'Men' | 'Goddess Wear' | 'Jewelry';
+  subcategory?: string; // 'Lehenga' | 'Saree' | 'Suit' | 'Necklace' etc.
+  description: string;
+  images: string[]; // Max 10 images
+  
+  // NEW FIELDS
+  cover_image_url?: string; // Auto-selected from images[0] if not provided
+  available_sizes: string[]; // Required for non-jewelry items
+  overall_size?: string; // Optional overall size (S, M, L, XL)
+  item_type?: string; // For single items: 'Lehenga', 'Saree', etc.
+  alteration_notes?: string; // Required if is_alteration_available = true
+  seller_acknowledgements: SellerAcknowledgements;
+  
+  // PRICING
   rental_price_per_day: number;
-  security_deposit_percentage: number;
-  size?: string;
-  availability_status?: 'available' | 'unavailable' | 'booked';
-  try_on_available?: boolean;
-  try_on_location?: any;
-  is_featured?: boolean;
-  is_visible?: boolean;
-  color?: string;
+  security_deposit_percentage: number; // Admin-controlled
+  min_rental_days: number;
+  max_rental_days: number;
+  
+  // PRODUCT DETAILS (OPTIONAL - not for jewelry)
+  material?: string; // Fabric: 'Silk' | 'Net' | 'Georgette' | 'Cotton' | 'Mixed' | 'Other'
+  color?: string; // Primary color
   secondary_color?: string;
-  material?: string;
-  tags?: string[];
-  occasion_tags?: string[];
-  condition?: string;
-  weight?: number;
-  care_instructions?: string;
-  min_rental_days?: number;
-  max_rental_days?: number;
+  weight?: string; // Free text like "500g", "1kg"
+  condition: 'new' | 'excellent' | 'good';
+  
+  // MEASUREMENTS (OPTIONAL - not for jewelry)
   chest_size?: string;
   waist_size?: string;
   hip_size?: string;
   length?: string;
-  is_multi_piece?: boolean;
+  
+  // MULTI-PIECE SUPPORT
+  is_multi_piece: boolean;
   piece_details?: ProductPieceDetails | null;
+  
+  // SERVICES
+  is_alteration_available: boolean;
+  care_instructions?: string; // Free text
+  
+  // SEARCH & DISCOVERY
+  tags?: string[]; // Custom tags for search
+  occasion_tags?: string[];
+  
+  // METADATA
+  availability_status: 'available' | 'unavailable' | 'booked';
+  is_visible: boolean;
+  is_featured?: boolean;
   target_gender?: 'women' | 'men' | 'unisex' | 'both';
   fit_notes?: string;
+  
+  // TIMESTAMPS
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ProductFilters {
@@ -60,6 +93,226 @@ export interface ProductFilters {
   occasion_tags?: string[];
   condition?: string;
 }
+
+/**
+ * Check if product category is jewelry or goddess wear
+ */
+export const isJewelryType = (category: string): boolean => {
+  return ['jewelry', 'jewellery', 'goddess_wear', 'goddess wear']
+    .includes(category?.toLowerCase() || '');
+};
+
+/**
+ * Check if a field is required based on product category
+ */
+export const isFieldRequired = (fieldName: string, category: string): boolean => {
+  const isJewelry = isJewelryType(category);
+  
+  const optionalForJewelry = [
+    'material',
+    'color',
+    'available_sizes',
+    'overall_size',
+    'chest_size',
+    'waist_size',
+    'hip_size',
+    'length',
+    'weight',
+    'fit_notes'
+  ];
+  
+  if (isJewelry && optionalForJewelry.includes(fieldName)) {
+    return false;
+  }
+  
+  return true;
+};
+
+/**
+ * Validate seller acknowledgements
+ */
+export const validateAcknowledgements = (acknowledgements: SellerAcknowledgements | undefined): void => {
+  if (!acknowledgements?.ownership_accuracy || 
+      !acknowledgements?.condition_hygiene || 
+      !acknowledgements?.policy_agreement) {
+    throw new Error('All seller acknowledgements must be accepted before submitting product');
+  }
+};
+
+/**
+ * Validate alteration notes
+ */
+export const validateAlterationNotes = (productData: ProductData): void => {
+  if (productData.is_alteration_available && 
+      (!productData.alteration_notes || productData.alteration_notes.trim() === '')) {
+    throw new Error('Alteration notes are required when alteration is available');
+  }
+};
+
+/**
+ * Validate sizes for non-jewelry
+ */
+export const validateSizes = (productData: ProductData): void => {
+  if (!isJewelryType(productData.category)) {
+    if (!productData.available_sizes || productData.available_sizes.length === 0) {
+      throw new Error('At least one size is required for non-jewelry products');
+    }
+  }
+};
+
+/**
+ * Auto-set cover image if not provided
+ */
+export const autoSetCoverImage = (productData: ProductData): void => {
+  if (!productData.cover_image_url && productData.images && productData.images.length > 0) {
+    productData.cover_image_url = productData.images[0];
+  }
+};
+
+/**
+ * Set acknowledgement timestamp
+ */
+export const setAcknowledgementTimestamp = (productData: ProductData): void => {
+  if (productData.seller_acknowledgements) {
+    productData.seller_acknowledgements.acknowledged_at = new Date().toISOString();
+  }
+};
+
+/**
+ * Get validation errors for product data
+ */
+export const getProductValidationErrors = (productData: ProductData): string[] => {
+  const errors: string[] = [];
+  
+  // Required fields
+  if (!productData.title) errors.push('Title is required');
+  if (!productData.category) errors.push('Category is required');
+  if (!productData.description) errors.push('Description is required');
+  if (!productData.rental_price_per_day) errors.push('Rental price is required');
+  if (!productData.condition) errors.push('Condition is required');
+  
+  // Acknowledgements
+  if (!productData.seller_acknowledgements?.ownership_accuracy) {
+    errors.push('Ownership acknowledgement is required');
+  }
+  if (!productData.seller_acknowledgements?.condition_hygiene) {
+    errors.push('Condition & hygiene acknowledgement is required');
+  }
+  if (!productData.seller_acknowledgements?.policy_agreement) {
+    errors.push('Policy agreement acknowledgement is required');
+  }
+  
+  // Alteration notes
+  if (productData.is_alteration_available && !productData.alteration_notes) {
+    errors.push('Alteration notes required when alteration is available');
+  }
+  
+  // Sizes for non-jewelry
+  if (!isJewelryType(productData.category)) {
+    if (!productData.available_sizes || productData.available_sizes.length === 0) {
+      errors.push('At least one size is required for non-jewelry products');
+    }
+  }
+  
+  // Images
+  if (!productData.images || productData.images.length === 0) {
+    errors.push('At least one image is required');
+  }
+  if (productData.images && productData.images.length > 10) {
+    errors.push('Maximum 10 images allowed');
+  }
+  
+  // Category validation
+  const validCategories = ['Women', 'Men', 'Goddess Wear', 'Jewelry'];
+  if (!validCategories.includes(productData.category)) {
+    errors.push('Invalid category. Must be one of: Women, Men, Goddess Wear, Jewelry');
+  }
+  
+  // Condition validation
+  const validConditions = ['new', 'excellent', 'good'];
+  if (!validConditions.includes(productData.condition)) {
+    errors.push('Invalid condition. Must be one of: new, excellent, good');
+  }
+  
+  return errors;
+};
+
+/**
+ * Sanitize and prepare product data for database
+ */
+export const sanitizeProductData = (productData: ProductData): ProductData => {
+  // Auto-set cover image
+  if (!productData.cover_image_url && productData.images?.length > 0) {
+    productData.cover_image_url = productData.images[0];
+  }
+  
+  // Set acknowledgement timestamp
+  if (productData.seller_acknowledgements && !productData.seller_acknowledgements.acknowledged_at) {
+    productData.seller_acknowledgements.acknowledged_at = new Date().toISOString();
+  }
+  
+  // For jewelry, clear optional fields if they're empty strings
+  if (isJewelryType(productData.category)) {
+    if (productData.material === '') productData.material = undefined;
+    if (productData.color === '') productData.color = undefined;
+    if (productData.weight === '' || productData.weight === '0') productData.weight = undefined;
+  }
+  
+  // Ensure available_sizes is an array
+  if (!productData.available_sizes) {
+    productData.available_sizes = [];
+  }
+  
+  // Ensure images is an array
+  if (!productData.images) {
+    productData.images = [];
+  }
+  
+  return productData;
+};
+
+/**
+ * Format product for API response
+ * Ensures backward compatibility and proper field mapping
+ */
+export const formatProductResponse = (product: Record<string, unknown>): ProductData => {
+  return {
+    ...product,
+    // Ensure new fields have defaults
+    cover_image_url: product.cover_image_url || (product.images as string[])?.[0],
+    available_sizes: product.available_sizes || [],
+    seller_acknowledgements: product.seller_acknowledgements as SellerAcknowledgements || {
+      ownership_accuracy: false,
+      condition_hygiene: false,
+      policy_agreement: false,
+    },
+    // Map old size field to overall_size for backward compatibility
+    overall_size: product.overall_size || (product.size as string),
+    // Ensure weight is string
+    weight: product.weight?.toString() || '',
+  } as ProductData;
+};
+
+/**
+ * Get fabric/material options for dropdown
+ */
+export const getFabricOptions = (): string[] => {
+  return ['Silk', 'Net', 'Georgette', 'Cotton', 'Mixed', 'Other'];
+};
+
+/**
+ * Get condition options
+ */
+export const getConditionOptions = (): string[] => {
+  return ['new', 'excellent', 'good'];
+};
+
+/**
+ * Get category options
+ */
+export const getCategoryOptions = (): string[] => {
+  return ['Women', 'Men', 'Goddess Wear', 'Jewelry'];
+};
 
 // Helper function to upload image to Supabase Storage
 export async function uploadProductImage(file: Express.Multer.File, productId: string, imageIndex: number): Promise<string> {
@@ -112,9 +365,13 @@ export async function uploadMultipleImages(files: Express.Multer.File[], product
 
 export async function createProduct(productData: ProductData) {
   console.log('Creating product with data:', productData);
+  
+  // Sanitize data before inserting
+  const sanitizedData = sanitizeProductData(productData);
+  
   const { data, error } = await supabaseDB
     .from('products')
-    .insert([productData])
+    .insert([sanitizedData])
     .select()
     .single();
 
@@ -124,14 +381,17 @@ export async function createProduct(productData: ProductData) {
     throw new Error(`Failed to create product: ${error.message}`);
   }
 
-  return data;
+  return formatProductResponse(data);
 }
 
 export async function updateProduct(productId: string, productData: Partial<ProductData>) {
+  // Only sanitize if we have a complete product object
+  const dataToUpdate = productData.title ? sanitizeProductData(productData as ProductData) : productData;
+  
   const { data, error } = await supabaseDB
     .from('products')
     .update({
-      ...productData,
+      ...dataToUpdate,
       updated_at: new Date().toISOString()
     })
     .eq('id', productId)
@@ -142,7 +402,7 @@ export async function updateProduct(productId: string, productData: Partial<Prod
     throw new Error(`Failed to update product: ${error.message}`);
   }
 
-  return data;
+  return formatProductResponse(data);
 }
 
 export async function deleteProduct(productId: string) {
@@ -193,7 +453,7 @@ export async function getProductById(productId: string) {
     throw new Error(`Product not found: ${error.message}`);
   }
 
-  return data;
+  return formatProductResponse(data);
 }
 
 export async function getSellerProducts(sellerId: string, page: number = 1, limit: number = 10) {
@@ -218,7 +478,7 @@ export async function getSellerProducts(sellerId: string, page: number = 1, limi
   }
 
   return {
-    products: data,
+    products: (data || []).map(formatProductResponse),
     total: count,
     page,
     limit,
@@ -312,7 +572,7 @@ export async function searchProducts(
   }
 
   return {
-    products: data,
+    products: (data || []).map(formatProductResponse),
     total: count,
     page,
     limit,
@@ -352,7 +612,7 @@ export async function getProductsByCategory(
   }
 
   return {
-    products: data,
+    products: (data || []).map(formatProductResponse),
     total: count,
     page,
     limit,
@@ -388,7 +648,7 @@ export async function getFeaturedProducts(page: number = 1, limit: number = 10) 
   }
 
   return {
-    products: data,
+    products: (data || []).map(formatProductResponse),
     total: count,
     page,
     limit,
@@ -433,7 +693,7 @@ export async function browseProducts(
   }
 
   return {
-    products: data,
+    products: (data || []).map(formatProductResponse),
     total: count,
     page,
     limit,

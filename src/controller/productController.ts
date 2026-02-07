@@ -12,7 +12,13 @@ import {
   getFeaturedProducts,
   browseProducts,
   uploadMultipleImages,
-  deleteProductImage
+  deleteProductImage,
+  validateAcknowledgements,
+  validateAlterationNotes,
+  validateSizes,
+  getProductValidationErrors,
+  isJewelryType,
+  ProductData
 } from '../services/productService';
 import { createMulterInstance } from '../../utils/multerUtils';
 
@@ -34,18 +40,35 @@ export async function addProduct(req: AuthenticatedRequest, res: Response): Prom
   });
 
   try {
-    const productData = req.body;
+    let productData = req.body;
     console.log('[ProductController] Parsed product data:', productData);
 
     // Parse array fields
     if (productData.tags) {
-      productData.tags = JSON.parse(productData.tags);
+      productData.tags = typeof productData.tags === 'string' ? JSON.parse(productData.tags) : productData.tags;
     }
     if (productData.occasion_tags) {
-      productData.occasion_tags = JSON.parse(productData.occasion_tags);
+      productData.occasion_tags = typeof productData.occasion_tags === 'string' ? JSON.parse(productData.occasion_tags) : productData.occasion_tags;
     }
     if (productData.try_on_location) {
-      productData.try_on_location = JSON.parse(productData.try_on_location);
+      productData.try_on_location = typeof productData.try_on_location === 'string' ? JSON.parse(productData.try_on_location) : productData.try_on_location;
+    }
+    
+    // Parse new fields
+    if (productData.available_sizes) {
+      productData.available_sizes = typeof productData.available_sizes === 'string' 
+        ? JSON.parse(productData.available_sizes) 
+        : productData.available_sizes;
+    }
+    if (productData.piece_details) {
+      productData.piece_details = typeof productData.piece_details === 'string' 
+        ? JSON.parse(productData.piece_details) 
+        : productData.piece_details;
+    }
+    if (productData.seller_acknowledgements) {
+      productData.seller_acknowledgements = typeof productData.seller_acknowledgements === 'string'
+        ? JSON.parse(productData.seller_acknowledgements)
+        : productData.seller_acknowledgements;
     }
 
     const tempProductId = uuidv4();
@@ -58,20 +81,39 @@ export async function addProduct(req: AuthenticatedRequest, res: Response): Prom
       console.log('[ProductController] Uploaded image URLs:', imageUrls);
     }
 
-    const finalProductData = {
+    // Build final product data with proper types
+    const finalProductData: ProductData = {
       ...productData,
       seller_id: req.user!.id,
       images: imageUrls,
       rental_price_per_day: Number(productData.rental_price_per_day),
       security_deposit_percentage: Number(productData.security_deposit_percentage),
-      weight: productData.weight ? Number(productData.weight) : undefined,
+      weight: productData.weight ? String(productData.weight) : undefined,
       min_rental_days: Number(productData.min_rental_days),
       max_rental_days: Number(productData.max_rental_days),
       is_multi_piece: productData.is_multi_piece || false,
       piece_details: productData.piece_details || null,
-      is_alteration_available: productData.is_alteration_available || false // ADD THIS LINE
+      is_alteration_available: productData.is_alteration_available || false,
+      available_sizes: productData.available_sizes || [],
+      seller_acknowledgements: productData.seller_acknowledgements || {
+        ownership_accuracy: false,
+        condition_hygiene: false,
+        policy_agreement: false
+      }
     };
+    
     console.log('[ProductController] Final product data for creation:', finalProductData);
+
+    // NEW VALIDATIONS
+    const validationErrors = getProductValidationErrors(finalProductData);
+    if (validationErrors.length > 0) {
+      console.log('[ProductController] Validation errors:', validationErrors);
+      res.status(400).json({ 
+        error: 'Validation failed', 
+        details: validationErrors 
+      });
+      return;
+    }
 
     const product = await createProduct(finalProductData);
     console.log('[ProductController] Product created successfully:', product);
@@ -100,19 +142,25 @@ export async function editProduct(req: AuthenticatedRequest, res: Response): Pro
 
     // Parse array fields
     if (productData.tags) {
-      productData.tags = JSON.parse(productData.tags);
+      productData.tags = typeof productData.tags === 'string' ? JSON.parse(productData.tags) : productData.tags;
     }
     if (productData.occasion_tags) {
-      productData.occasion_tags = JSON.parse(productData.occasion_tags);
+      productData.occasion_tags = typeof productData.occasion_tags === 'string' ? JSON.parse(productData.occasion_tags) : productData.occasion_tags;
     }
     if (productData.try_on_location) {
-      productData.try_on_location = JSON.parse(productData.try_on_location);
+      productData.try_on_location = typeof productData.try_on_location === 'string' ? JSON.parse(productData.try_on_location) : productData.try_on_location;
     }
     if (productData.piece_details) {
-      productData.piece_details = JSON.parse(productData.piece_details);
+      productData.piece_details = typeof productData.piece_details === 'string' ? JSON.parse(productData.piece_details) : productData.piece_details;
     }
     if (productData.existingImages) {
-      productData.existingImages = JSON.parse(productData.existingImages);
+      productData.existingImages = typeof productData.existingImages === 'string' ? JSON.parse(productData.existingImages) : productData.existingImages;
+    }
+    if (productData.available_sizes) {
+      productData.available_sizes = typeof productData.available_sizes === 'string' ? JSON.parse(productData.available_sizes) : productData.available_sizes;
+    }
+    if (productData.seller_acknowledgements) {
+      productData.seller_acknowledgements = typeof productData.seller_acknowledgements === 'string' ? JSON.parse(productData.seller_acknowledgements) : productData.seller_acknowledgements;
     }
 
     const existingProduct = await getProductById(productId);
@@ -151,13 +199,15 @@ export async function editProduct(req: AuthenticatedRequest, res: Response): Pro
     const finalProductData = {
       ...dbProductData,
       images: finalImages,
-      rental_price_per_day: Number(productData.rental_price_per_day),
-      security_deposit_percentage: Number(productData.security_deposit_percentage),
-      weight: productData.weight ? Number(productData.weight) : undefined,
-      min_rental_days: Number(productData.min_rental_days),
-      max_rental_days: Number(productData.max_rental_days),
-      is_multi_piece: productData.is_multi_piece || false,
-      piece_details: productData.piece_details || null
+      rental_price_per_day: productData.rental_price_per_day ? Number(productData.rental_price_per_day) : undefined,
+      security_deposit_percentage: productData.security_deposit_percentage ? Number(productData.security_deposit_percentage) : undefined,
+      weight: productData.weight ? String(productData.weight) : undefined,
+      min_rental_days: productData.min_rental_days ? Number(productData.min_rental_days) : undefined,
+      max_rental_days: productData.max_rental_days ? Number(productData.max_rental_days) : undefined,
+      is_multi_piece: productData.is_multi_piece,
+      piece_details: productData.piece_details || null,
+      is_alteration_available: productData.is_alteration_available,
+      available_sizes: productData.available_sizes
     };
     console.log('[ProductController] Final product data for update:', finalProductData);
 

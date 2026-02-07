@@ -46,6 +46,7 @@ export interface SignedUrlResponse {
 
 export interface DocumentViewResponse {
   signedUrl: string;
+  mimeType: string;
   expiresIn: number;
   documentInfo: Partial<KYCDocument>;
 }
@@ -139,7 +140,7 @@ export class KYCService {
     userId: string, 
     documentId: string, 
     requestorRole: 'user' | 'admin'
-  ): Promise<DocumentViewResponse> {
+  ): Promise<{ signedUrl: string; mimeType: string; expiresIn: number; documentInfo: Partial<KYCDocument> }> {
     // Get document info
     const { data: document, error } = await supabaseDB
       .from('kyc_documents')
@@ -163,6 +164,7 @@ export class KYCService {
 
     return {
       signedUrl,
+      mimeType: document.mime_type || 'application/pdf',
       expiresIn: 3600,
       documentInfo: {
         id: document.id,

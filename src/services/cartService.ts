@@ -162,7 +162,8 @@ export async function getUserCart(buyerId: string) {
         images,
         rental_price_per_day,
         security_deposit_percentage,
-        size,
+        overall_size,
+        available_sizes,
         availability_status,
         profiles!products_seller_id_fkey (
           full_name,
