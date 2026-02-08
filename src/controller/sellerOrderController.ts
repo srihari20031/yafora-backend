@@ -10,7 +10,9 @@ import {
   getSellerReviews,
   acceptSellerOrder,
   rejectSellerOrder,
-  getSellerPendingOrders
+  getSellerPendingOrders,
+  getSellerStats,
+  getSellerOrderById as getSellerOrderByIdService
 } from '../services/sellerOrderService';
 
 export async function getSellerOrdersList(req: Request, res: Response): Promise<void> {
@@ -93,6 +95,20 @@ export async function getSellerTotalTransactionsController(req: Request, res: Re
     res.status(200).json({ 
       message: 'Total transactions retrieved successfully', 
       totals 
+    });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+}
+
+export async function getSellerStatsController(req: Request, res: Response): Promise<void> {
+  const { sellerId } = req.params;
+
+  try {
+    const stats = await getSellerStats(sellerId);
+    res.status(200).json({ 
+      message: 'Seller stats retrieved successfully', 
+      stats 
     });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
@@ -222,6 +238,37 @@ export const getOrders = async (req: AuthenticatedRequest, res: Response): Promi
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to fetch orders'
+    });
+  }
+};
+
+export const getSellerOrderByIdController = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { orderId } = req.params;
+    const sellerId = req.user?.id;
+
+    console.log('[getSellerOrderByIdController] Order ID:', orderId);
+    console.log('[getSellerOrderByIdController] Seller ID from req.user:', sellerId);
+    console.log('[getSellerOrderByIdController] Full req.user:', req.user);
+
+    if (!sellerId) {
+      console.log('[getSellerOrderByIdController] No seller ID - returning 401');
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+
+    const order = await getSellerOrderByIdService(orderId, sellerId);
+
+    console.log('[getSellerOrderByIdController] Order fetched successfully');
+    res.status(200).json({
+      success: true,
+      data: order
+    });
+  } catch (error: any) {
+    console.error('[getSellerOrderByIdController] Error:', error);
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to fetch order details'
     });
   }
 };

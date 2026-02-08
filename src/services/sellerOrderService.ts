@@ -404,6 +404,140 @@ export const rejectSellerOrder = async (
   return rejectedOrder;
 };
 
+// Types for seller stats
+interface SellerStats {
+  overview: {
+    totalProducts: number;
+    activeProducts: number;
+    totalOrders: number;
+    pendingOrders: number;
+    completedOrders: number;
+    cancelledOrders: number;
+    totalRevenue: number;
+    averageRating: number;
+    totalReviews: number;
+    pendingEarnings: number;
+    securityDepositsHeld: number;
+  };
+  recentOrders: any[];
+  topProducts: any[];
+}
+
+// Get seller stats
+export async function getSellerStats(sellerId: string): Promise<SellerStats> {
+  try {
+    // Get products count
+    const { count: totalProducts } = await supabaseDB
+      .from('products')
+      .select('*', { count: 'exact', head: true })
+      .eq('seller_id', sellerId);
+
+    const { count: activeProducts } = await supabaseDB
+      .from('products')
+      .select('*', { count: 'exact', head: true })
+      .eq('seller_id', sellerId)
+      .eq('availability_status', 'available');
+
+    // Get orders
+    const { data: orders } = await supabaseDB
+      .from('orders')
+      .select('*')
+      .eq('seller_id', sellerId)
+      .order('created_at', { ascending: false });
+
+    const allOrders = orders || [];
+    const pendingOrders = allOrders.filter(o => o.seller_confirmation_status === 'pending').length;
+    const completedOrders = allOrders.filter(o => ['completed', 'delivered'].includes(o.order_status)).length;
+    const cancelledOrders = allOrders.filter(o => o.order_status === 'cancelled').length;
+    const totalRevenue = allOrders
+      .filter(o => ['completed', 'delivered'].includes(o.order_status))
+      .reduce((sum, o) => sum + (o.total_rental_price || 0), 0);
+    const pendingEarnings = allOrders
+      .filter(o => o.order_status === 'confirmed')
+      .reduce((sum, o) => sum + (o.total_rental_price || 0), 0);
+    const securityDepositsHeld = allOrders
+      .filter(o => o.security_deposit_status === 'held')
+      .reduce((sum, o) => sum + (o.security_deposit || 0), 0);
+
+    // Get seller products for reviews
+    const { data: sellerProducts } = await supabaseDB
+      .from('products')
+      .select('id')
+      .eq('seller_id', sellerId);
+
+    const productIds = sellerProducts?.map(p => p.id) || [];
+
+    // Get reviews
+    const { data: reviews } = await supabaseDB
+      .from('reviews')
+      .select('rating')
+      .in('product_id', productIds);
+
+    const totalReviews = reviews?.length || 0;
+    const averageRating = totalReviews > 0 && reviews
+      ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / totalReviews
+      : 0;
+
+    // Get recent orders
+    const recentOrders = allOrders.slice(0, 5);
+
+    // Get top products
+    const { data: topProducts } = await supabaseDB
+      .from('orders')
+      .select(`
+        product_id,
+        products (title, cover_image_url),
+        total_rental_price
+      `)
+      .eq('seller_id', sellerId)
+      .in('order_status', ['completed', 'delivered'])
+      .limit(5);
+
+    // Aggregate top products
+    const productStats = new Map();
+    topProducts?.forEach(order => {
+      const productId = order.product_id;
+      if (!productStats.has(productId)) {
+        productStats.set(productId, {
+          id: productId,
+          title: order.products?.[0]?.title || 'Unknown',
+          image: order.products?.[0]?.cover_image_url,
+          totalOrders: 0,
+          totalRevenue: 0
+        });
+      }
+      const stats = productStats.get(productId);
+      stats.totalOrders += 1;
+      stats.totalRevenue += order.total_rental_price || 0;
+    });
+
+    const sortedTopProducts = Array.from(productStats.values())
+      .sort((a, b) => b.totalOrders - a.totalOrders)
+      .slice(0, 5);
+
+    return {
+      overview: {
+        totalProducts: totalProducts || 0,
+        activeProducts: activeProducts || 0,
+        totalOrders: allOrders.length,
+        pendingOrders,
+        completedOrders,
+        cancelledOrders,
+        totalRevenue,
+        averageRating: parseFloat(averageRating.toFixed(1)),
+        totalReviews,
+        pendingEarnings,
+        securityDepositsHeld
+      },
+      recentOrders,
+      topProducts: sortedTopProducts
+    };
+  } catch (error) {
+    console.error('Error in getSellerStats:', error);
+    throw new Error(`Failed to fetch seller stats: ${error}`);
+  }
+}
+
 export const getSellerPendingOrders = async (sellerId: string) => {
   const { data, error } = await supabaseDB
     .from('orders')
@@ -413,5 +547,41 @@ export const getSellerPendingOrders = async (sellerId: string) => {
     .order('created_at', { ascending: false });
 
   if (error) throw error;
+  return data;
+};
+
+export const getSellerOrderById = async (orderId: string, sellerId: string) => {
+
+  console.log("Order id in service:", orderId);
+  console.log("Seller id in service:", sellerId);
+  const { data, error } = await supabaseDB
+    .from('orders')
+    .select(`
+      *,
+      products (
+        id,
+        title,
+        images,
+        cover_image_url,
+        rental_price_per_day
+      ),
+      buyer:profiles!orders_buyer_id_fkey (
+        id,
+        full_name,
+        email,
+        phone_number
+      )
+    `)
+    .eq('id', orderId)
+    .eq('seller_id', sellerId)
+    .single();
+
+    console.log("Data fetched in service:", data);
+    console.log("Error in service:", error);
+
+  if (error || !data) {
+    throw new Error("Order not found or you do not have permission to view it");
+  }
+
   return data;
 };

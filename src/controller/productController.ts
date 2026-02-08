@@ -91,9 +91,9 @@ export async function addProduct(req: AuthenticatedRequest, res: Response): Prom
       weight: productData.weight ? String(productData.weight) : undefined,
       min_rental_days: Number(productData.min_rental_days),
       max_rental_days: Number(productData.max_rental_days),
-      is_multi_piece: productData.is_multi_piece || false,
+      is_multi_piece: productData.is_multi_piece === 'true' || productData.is_multi_piece === true,
       piece_details: productData.piece_details || null,
-      is_alteration_available: productData.is_alteration_available || false,
+      is_alteration_available: productData.is_alteration_available === 'true' || productData.is_alteration_available === true,
       available_sizes: productData.available_sizes || [],
       seller_acknowledgements: productData.seller_acknowledgements || {
         ownership_accuracy: false,
@@ -204,9 +204,9 @@ export async function editProduct(req: AuthenticatedRequest, res: Response): Pro
       weight: productData.weight ? String(productData.weight) : undefined,
       min_rental_days: productData.min_rental_days ? Number(productData.min_rental_days) : undefined,
       max_rental_days: productData.max_rental_days ? Number(productData.max_rental_days) : undefined,
-      is_multi_piece: productData.is_multi_piece,
+      is_multi_piece: productData.is_multi_piece === 'true' || productData.is_multi_piece === true,
       piece_details: productData.piece_details || null,
-      is_alteration_available: productData.is_alteration_available,
+      is_alteration_available: productData.is_alteration_available === 'true' || productData.is_alteration_available === true,
       available_sizes: productData.available_sizes
     };
     console.log('[ProductController] Final product data for update:', finalProductData);
