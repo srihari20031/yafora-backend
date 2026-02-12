@@ -278,6 +278,14 @@ const notificationTemplates: Record<string, Record<string, LegacyNotificationTem
         body: 'Hello {{full_name}},\n\nYour KYC verification is successful! You\'re now eligible to list your costume and jewelry items for rent on Yafora.\n\nClick below to start adding your products:\n🔗 List a Product\n\nHappy Renting!\nBest,\nYafora Team'
       }
     },
+    order_confirmed: {
+      inApp: 'You have confirmed the rental request for {{product_name}}.',
+      whatsapp: 'Yafora: Hello {{full_name}}, You have successfully confirmed the rental request for {{product_name}} from {{customer_name}}. Please prepare the item for delivery. Thank you – Team Yafora',
+      email: {
+        subject: 'Order Confirmed - {{product_name}}',
+        body: 'Dear {{full_name}},\n\nYou have successfully confirmed the rental order for "{{product_name}}".\n\n📦 Order Details:\n- Order ID: #{{order_id}}\n- Product: {{product_name}}\n- Customer: {{customer_name}}\n- Customer Phone: {{customer_phone}}\n- Rental Period: {{rental_start_date}} to {{rental_end_date}}\n- Delivery Address: {{delivery_address}}\n- Total Amount: ₹{{total_amount}}\n\n📋 Next Steps:\n• Prepare the item for pickup\n• Ensure it\'s in excellent condition\n• A delivery partner will be assigned soon\n• You\'ll be notified when pickup is scheduled\n\nThank you for your partnership!\n\nBest regards,\nTeam Yafora'
+      }
+    },
     product_listed: {
       inApp: 'Your product {{product_name}} has been listed successfully.',
       whatsapp: 'Yafora: Hello {{full_name}}, Your product listing {{product_name}} is now live. Well done! Wishing you great rentals ahead 🌟 Thank you – Team Yafora',
@@ -356,6 +364,14 @@ const notificationTemplates: Record<string, Record<string, LegacyNotificationTem
       email: {
         subject: 'KYC Verified – Start Renting Now',
         body: 'Hello {{full_name}},\n\nYour KYC verification is complete! You\'re now ready to explore and rent stunning costumes and jewelry on Yafora.\n\nStart browsing:\n🔗 Explore Now\n\nShine on!\nBest,\nYafora Team'
+      }
+    },
+    order_confirmed: {
+      inApp: 'Your rental for {{product_name}} has been confirmed by the seller!',
+      whatsapp: 'Yafora: Great news {{full_name}}! The seller has confirmed your rental for {{product_name}}. We\'ll notify you once it\'s ready for pickup/delivery. Shine on! ✨ – Team Yafora',
+      email: {
+        subject: 'Rental Confirmed - {{product_name}}',
+        body: 'Hi {{full_name}},\n\nGreat news! The seller has confirmed your rental for "{{product_name}}".\n\n📅 Rental Period: {{rental_start_date}} to {{rental_end_date}}\n📍 Delivery Address: {{delivery_address}}\n💰 Total Amount: ₹{{total_amount}}\n🔒 Security Deposit: ₹{{security_deposit}}\n👤 Seller: {{seller_name}}\n📞 Seller Contact: {{seller_phone}}\n\n📋 Next Steps:\n• Your order is being prepared for delivery\n• You\'ll receive a notification once the item is picked up\n• Ensure someone is available at the delivery address\n• Keep the item in excellent condition during rental period\n\nWe\'re excited for you to enjoy your rental!\n\nWith love,\nYafora Team'
       }
     },
     order_placed: {

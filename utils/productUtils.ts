@@ -54,9 +54,6 @@ export interface Product {
   piece_details: ProductPieceDetails | null;
   is_alteration_available: boolean;
   
-  // FIT
-  fit_notes?: string;
-  
   // RENTAL
   min_rental_days?: number;
   max_rental_days?: number;

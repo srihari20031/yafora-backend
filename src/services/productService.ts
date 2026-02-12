@@ -72,7 +72,6 @@ export interface ProductData {
   is_visible: boolean;
   is_featured?: boolean;
   target_gender?: 'women' | 'men' | 'unisex' | 'both';
-  fit_notes?: string;
   
   // TIMESTAMPS
   created_at?: string;
@@ -117,8 +116,7 @@ export const isFieldRequired = (fieldName: string, category: string): boolean =>
     'waist_size',
     'hip_size',
     'length',
-    'weight',
-    'fit_notes'
+    'weight'
   ];
   
   if (isJewelry && optionalForJewelry.includes(fieldName)) {
@@ -437,7 +435,6 @@ export async function getProductById(productId: string) {
       piece_details,
       is_alteration_available,
       target_gender,
-      fit_notes,
       profiles!products_seller_id_fkey (
         full_name,
         phone_number,
@@ -466,8 +463,7 @@ export async function getSellerProducts(sellerId: string, page: number = 1, limi
       is_multi_piece,
       piece_details,
       is_alteration_available,
-      target_gender,
-      fit_notes
+      target_gender
     `, { count: 'exact' })
     .eq('seller_id', sellerId)
     .order('created_at', { ascending: false })
@@ -501,7 +497,6 @@ export async function searchProducts(
       is_multi_piece,
       piece_details,
       target_gender,
-      fit_notes,
       profiles!products_seller_id_fkey (
         full_name,
         pickup_address
@@ -595,7 +590,6 @@ export async function getProductsByCategory(
       piece_details,
       is_alteration_available,
       target_gender,
-      fit_notes,
       profiles!products_seller_id_fkey (
         full_name,
         pickup_address
@@ -631,7 +625,6 @@ export async function getFeaturedProducts(page: number = 1, limit: number = 10) 
       piece_details,
       is_alteration_available,
       target_gender,
-      fit_notes,
       profiles!products_seller_id_fkey (
         full_name,
         pickup_address
@@ -671,7 +664,6 @@ export async function browseProducts(
       piece_details,
       is_alteration_available,
       target_gender,
-      fit_notes,
       profiles!products_seller_id_fkey (
         full_name,
         pickup_address
