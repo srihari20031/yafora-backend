@@ -4,7 +4,8 @@ import {
   getReferralLinkController,
   validateReferralController,
   processReferralController,
-  getReferralStatsController
+  getReferralStatsController,
+  createReferralInviteController
 } from "../controller/promoCodeAndReferralController";
 
 const router = Router();
@@ -25,5 +26,7 @@ router.post('/referrals/process', processReferralController);
 
 // Get user's referral statistics (replaces the old /:userId route)
 router.get('/referrals/stats/:userId', getReferralStatsController);
+
+router.post('/referrals/invite', createReferralInviteController);
 
 export default router;

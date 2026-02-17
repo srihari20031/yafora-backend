@@ -1,4 +1,6 @@
 import supabaseDB from "../../config/connectDB";
+import { sendHtmlEmail } from "../../utils/sendEmail";
+
 
 
 interface PromoCode {
@@ -94,21 +96,23 @@ export async function validateReferralCode(referralCode: string): Promise<{
 // ================================
 // 4. PROCESS REFERRAL ON SIGNUP
 // ================================
-export async function processReferralSignup(referralCode: string, newUserId: string): Promise<void> {
+export async function processReferralSignup(
+  referralCode: string, 
+  newUserId: string,
+  userEmail: string  // 🔑 passed directly from signup, no profile lookup
+): Promise<void> {
   try {
-    // Validate referral code and get referrer
     const { isValid, referrerId } = await validateReferralCode(referralCode);
     
     if (!isValid || !referrerId) {
       throw new Error('Invalid referral code');
     }
 
-    // Don't allow self-referral
     if (referrerId === newUserId) {
       throw new Error('Cannot refer yourself');
     }
 
-    // Check if this user was already referred
+    // Check if already referred
     const { data: existingReferral, error: checkError } = await supabaseDB
       .from('referrals')
       .select('id')
@@ -123,20 +127,48 @@ export async function processReferralSignup(referralCode: string, newUserId: str
       throw new Error('User has already been referred');
     }
 
-    // Create referral record
+    // 🔑 Check if an email invite exists for this email + referral code
+    // (profile may not exist yet — so we use the email from signup payload directly)
+    const { data: emailInvite } = await supabaseDB
+      .from('referrals')
+      .select('id')
+      .eq('referral_code', referralCode)
+      .eq('invited_email', userEmail)
+      .eq('status', 'pending')
+      .is('referred_id', null)
+      .single();
+
+    if (emailInvite) {
+      // ✅ Email invite found — update it, don't create a new record
+      const { error: updateError } = await supabaseDB
+        .from('referrals')
+        .update({ referred_id: newUserId })
+        .eq('id', emailInvite.id);
+
+      if (updateError) {
+        throw new Error(`Failed to update referral: ${updateError.message}`);
+      }
+
+      console.log(`✅ Linked email invite to new user ${newUserId}`);
+      return;
+    }
+
+    // No email invite found — organic signup via shared link, create new record
     const { error: insertError } = await supabaseDB
       .from('referrals')
       .insert({
         referrer_id: referrerId,
         referred_id: newUserId,
         referral_code: referralCode,
-        reward_amount: 100, // Configure your reward amount
+        reward_amount: 100,
         status: 'pending',
       });
 
     if (insertError) {
       throw new Error(`Failed to create referral: ${insertError.message}`);
     }
+
+    console.log(`✅ Created new referral for organic signup ${newUserId}`);
   } catch (error) {
     throw new Error(`Failed to process referral signup: ${(error as Error).message}`);
   }
@@ -220,15 +252,15 @@ export async function getReferralStats(userId: string, baseUrl?: string): Promis
     const totalEarnings = completedReferrals.reduce((sum, r) => sum + r.reward_amount, 0);
 
     // Transform referrals to match frontend expectations
-    const transformedReferrals = referrals.map(referral => ({
-      id: referral.id,
-      referred_user_email: referral.referred_user?.email || 'Unknown',
-      referred_user_id: referral.referred_id,
-      status: referral.status === 'completed' ? 'rewarded' : referral.status, // Map 'completed' to 'rewarded' for frontend
-      reward_amount: referral.reward_amount,
-      created_at: referral.created_at,
-      completed_at: referral.completed_at
-    }));
+   const transformedReferrals = referrals.map(referral => ({
+  id: referral.id,
+  referred_user_email: referral.referred_user?.email || referral.invited_email || 'Unknown', // ✅
+  referred_user_id: referral.referred_id,
+  status: referral.status === 'completed' ? 'rewarded' : referral.status,
+  reward_amount: referral.reward_amount,
+  created_at: referral.created_at,
+  completed_at: referral.completed_at
+}));
 
     return {
       referralCode,
@@ -399,16 +431,58 @@ export async function getUserReferrals(userId: string): Promise<{ referrals: Ref
 }
 
 export async function createReferralInvite(referrerId: string, email: string): Promise<Referral> {
-  // Generate a unique referral code
-  const referralCode = `REF-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+  // Get referrer's profile
+  const { data: referrer, error: profileError } = await supabaseDB
+    .from('profiles')
+    .select('full_name, referral_code')
+    .eq('id', referrerId)
+    .single();
+
+  if (profileError || !referrer) {
+    throw new Error('Referrer profile not found');
+  }
+
+  // 🔑 FIX 1: Check if email already exists in profiles (already registered)
+  const { data: existingUser } = await supabaseDB
+    .from('profiles')
+    .select('id')
+    .eq('email', email)
+    .single();
+
+  if (existingUser) {
+    throw new Error('This email is already registered on Yafora');
+  }
+
+  // 🔑 FIX 2: Check if this email was already invited with this referral code
+  const { data: existingInvite } = await supabaseDB
+    .from('referrals')
+    .select('id')
+    .eq('referral_code', referrer.referral_code)
+    .eq('invited_email', email)
+    .single();
+
+  if (existingInvite) {
+    throw new Error('You have already sent an invitation to this email');
+  }
+
+  const referralLink = `https://rent.yafora.com/signup?ref=${referrer.referral_code}`;
+  const referrerName = referrer.full_name || 'Your friend';
+
+  await sendHtmlEmail(
+    email,
+    `${referrerName} invited you to join Yafora! 🎉`,
+    generateReferralInviteHtml(referrerName, referralLink),
+    `${referrerName} invited you to Yafora! Sign up here: ${referralLink}`
+  );
 
   const { data, error } = await supabaseDB
     .from('referrals')
     .insert({
       referrer_id: referrerId,
       referred_id: null,
-      referral_code: referralCode,
-      reward_amount: 100, // Adjust this based on your reward policy
+      referral_code: referrer.referral_code,
+      invited_email: email,
+      reward_amount: 100,
       status: 'pending',
     })
     .select()
@@ -419,4 +493,141 @@ export async function createReferralInvite(referrerId: string, email: string): P
   }
 
   return data;
+}
+
+function generateReferralInviteHtml(referrerName: string, referralLink: string): string {
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>You're Invited to Yafora!</title>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+      <style>
+        body {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          margin: 0; padding: 0;
+          background-color: #F9FAFB;
+          color: #111827;
+        }
+        .container {
+          max-width: 640px; margin: 20px auto;
+          background-color: #FFFFFF;
+          border-radius: 12px; overflow: hidden;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .header {
+          background: linear-gradient(135deg, #670D2F 0%, #A53860 100%);
+          padding: 40px 24px; text-align: center;
+        }
+        .logo { font-size: 30px; font-weight: 700; color: #FFFFFF; margin: 0; }
+        .header-subtitle { color: #EF88AD; font-size: 16px; margin: 8px 0 0; }
+        .content { padding: 32px 28px; }
+        .gift-icon {
+          font-size: 48px; text-align: center; margin-bottom: 16px;
+        }
+        h2 { font-size: 22px; font-weight: 600; color: #111827; text-align: center; margin-bottom: 12px; }
+        p { margin: 0 0 16px; line-height: 1.6; font-size: 15px; color: #374151; }
+        .highlight-box {
+          background: #FFF1F2; border-left: 4px solid #A53860;
+          padding: 16px; border-radius: 8px; margin: 20px 0;
+          font-size: 15px; color: #374151;
+        }
+        .reward-badge {
+          background: linear-gradient(135deg, #16a34a, #15803d);
+          color: white; text-align: center;
+          padding: 16px; border-radius: 10px; margin: 20px 0;
+        }
+        .reward-badge .amount { font-size: 32px; font-weight: 700; }
+        .reward-badge .label { font-size: 13px; opacity: 0.9; margin-top: 4px; }
+        .button {
+          display: block; padding: 16px 28px;
+          background: linear-gradient(135deg, #670D2F 0%, #A53860 100%);
+          color: #FFFFFF !important; text-decoration: none;
+          border-radius: 8px; font-weight: 600; font-size: 16px;
+          text-align: center; margin: 24px 0;
+        }
+        .steps {
+          background: #F9FAFB; border-radius: 8px;
+          padding: 16px 20px; margin: 20px 0;
+        }
+        .step { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; font-size: 14px; }
+        .step:last-child { margin-bottom: 0; }
+        .step-number {
+          background: #670D2F; color: white;
+          width: 22px; height: 22px; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 12px; font-weight: 700; flex-shrink: 0;
+          line-height: 22px; text-align: center;
+        }
+        .footer {
+          background: #F9FAFB; padding: 24px; text-align: center;
+          font-size: 14px; color: #6B7280;
+          border-top: 1px solid #E5E7EB;
+        }
+        @media (max-width: 640px) {
+          .container { margin: 10px; }
+          .content { padding: 24px 16px; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1 class="logo">Yafora</h1>
+          <p class="header-subtitle">Elegant Rentals, Memorable Moments</p>
+        </div>
+
+        <div class="content">
+          <div class="gift-icon">🎁</div>
+          <h2>You've Been Invited!</h2>
+
+          <div class="highlight-box">
+            <strong>${referrerName}</strong> thinks you'd love Yafora — the easiest way to rent anything you need for life's special moments.
+          </div>
+
+          <div class="reward-badge">
+            <div class="amount">₹100</div>
+            <div class="label">Reward waiting for you on your first rental!</div>
+          </div>
+
+          <p style="text-align:center; color:#6B7280; font-size:14px;">Here's how it works:</p>
+          <div class="steps">
+            <div class="step">
+              <div class="step-number">1</div>
+              <span>Sign up using <strong>${referrerName}</strong>'s referral link below</span>
+            </div>
+            <div class="step">
+              <div class="step-number">2</div>
+              <span>Browse and complete your first rental on Yafora</span>
+            </div>
+            <div class="step">
+              <div class="step-number">3</div>
+              <span>Both you and <strong>${referrerName}</strong> earn rewards! 🎉</span>
+            </div>
+          </div>
+
+          <a href="${referralLink}" class="button">
+            Join Yafora & Claim Your Reward →
+          </a>
+
+          <p style="font-size:13px; color:#9CA3AF; text-align:center;">
+            Or copy this link: <a href="${referralLink}" style="color:#670D2F;">${referralLink}</a>
+          </p>
+        </div>
+
+        <div class="footer">
+          <p>Best regards,<br><strong>Team Yafora</strong></p>
+          <p style="margin-top:12px;">
+            Questions? Contact us at <a href="mailto:info@yafora.com" style="color:#670D2F;">info@yafora.com</a>
+          </p>
+          <p style="font-size:12px; color:#9CA3AF; margin-top:12px;">
+            You received this because ${referrerName} entered your email. If this was a mistake, you can ignore this email.
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
 }

@@ -98,16 +98,17 @@ export async function validateReferralController(req: Request, res: Response): P
   }
 }
 
+// promoCodeAndReferralController.ts
 export async function processReferralController(req: Request, res: Response): Promise<void> {
   try {
-    const { referralCode, newUserId } = req.body;
+    const { referralCode, newUserId, email } = req.body; // 🔑 extract email
 
     if (!referralCode || !newUserId) {
       res.status(400).json({ error: "Referral code and new user ID are required" });
       return;
     }
 
-    await processReferralSignup(referralCode, newUserId);
+    await processReferralSignup(referralCode, newUserId, email); // 🔑 pass email
     res.status(200).json({ message: "Referral processed successfully" });
   } catch (error) {
     console.error("Error processing referral:", error);

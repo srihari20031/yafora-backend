@@ -1,6 +1,7 @@
 // services/userService.ts
 
 import supabaseDB from "../../config/connectDB";
+import { processReferralSignup } from "./promoCodeAndReferral";
 
 // ================================
 // GENERATE REFERRAL CODE
@@ -51,56 +52,6 @@ async function generateUniqueReferralCode(): Promise<string> {
   return 'REF' + Date.now().toString(36).toUpperCase();
 }
 
-// ================================
-// VALIDATE REFERRAL CODE DURING SIGNUP
-// ================================
-async function validateAndProcessReferral(referralCode: string, newUserId: string): Promise<void> {
-  try {
-    // Validate referral code
-    const { data: referrer, error: referrerError } = await supabaseDB
-      .from('profiles')
-      .select('id, full_name')
-      .eq('referral_code', referralCode)
-      .single();
-
-    if (referrerError || !referrer) {
-      throw new Error('Invalid referral code');
-    }
-
-    // Don't allow self-referral (though this should be impossible during signup)
-    if (referrer.id === newUserId) {
-      throw new Error('Cannot refer yourself');
-    }
-
-    // Create referral record
-    const { error: insertError } = await supabaseDB
-      .from('referrals')
-      .insert({
-        referrer_id: referrer.id,
-        referred_id: newUserId,
-        referral_code: referralCode,
-        reward_amount: 100, // Configure your reward amount
-        status: 'pending',
-        created_at: new Date().toISOString(),
-      });
-
-    if (insertError) {
-      throw new Error(`Failed to create referral record: ${insertError.message}`);
-    }
-
-    console.log(`✅ Referral processed: ${referrer.full_name} referred new user ${newUserId}`);
-  } catch (error) {
-    // Log the error but don't fail the signup process
-    console.error(`⚠️ Referral processing failed (non-critical): ${(error as Error).message}`);
-  }
-}
-
-// ================================
-// SIGNUP FUNCTION
-// ================================
-// ================================
-// SIGNUP FUNCTION - FIXED VERSION
-// ================================
 export async function signUpUser(
   email: string,
   password: string,
@@ -344,9 +295,9 @@ export async function signUpUser(
         
         // Process referral if valid code was provided
         if (referralValid && referralCode) {
-          console.log('🔍 Processing referral for new user:', data.user.id, 'with code:', referralCode.trim());
-          await validateAndProcessReferral(referralCode.trim(), data.user.id);
-        }
+  console.log('🔍 Processing referral for new user:', data.user.id, 'with code:', referralCode.trim());
+  await processReferralSignup(referralCode.trim(), data.user.id, normalizedEmail); // 🔑 pass email
+}
 
         // Create default notification preferences
         try {
