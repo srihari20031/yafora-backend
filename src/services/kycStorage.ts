@@ -1,10 +1,16 @@
 import supabaseDB from "../../config/connectDB";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// NO CHANGES REQUIRED in this file.
+// StorageService is unchanged — all new logic lives in kycService.ts.
+// This file is included here for completeness only.
+// ─────────────────────────────────────────────────────────────────────────────
+
 export class StorageService {
   async generatePresignedUploadUrl(
-    bucket: string, 
-    key: string, 
-    contentType: string, 
+    bucket: string,
+    key: string,
+    contentType: string,
     expiresIn: number
   ): Promise<string> {
     const { data, error } = await supabaseDB.storage
@@ -15,12 +21,12 @@ export class StorageService {
       throw new Error(`Failed to generate upload URL: ${error.message}`);
     }
 
-    return data.signedUrl; // Return only the signed URL as a string
+    return data.signedUrl;
   }
 
   async generatePresignedDownloadUrl(
-    bucket: string, 
-    key: string, 
+    bucket: string,
+    key: string,
     expiresIn: number
   ): Promise<string> {
     const { data, error } = await supabaseDB.storage
@@ -39,7 +45,7 @@ export class StorageService {
       .from(bucket)
       .list(key.split('/').slice(0, -1).join('/'), {
         limit: 1,
-        search: key.split('/').pop()
+        search: key.split('/').pop(),
       });
 
     if (error) {

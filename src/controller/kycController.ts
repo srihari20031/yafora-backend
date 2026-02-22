@@ -1,12 +1,10 @@
 import { Request, Response } from 'express';
-
 import { KYCService } from '../services/kycService';
 import { createMulterInstance } from '../../utils/multerUtils';
-import { sendNotification } from '../services/notificationService'; // Import notification service
+import { sendNotification } from '../services/notificationService';
 
-// Configure Multer for KYC document uploads
 export const kycUploadMiddleware = createMulterInstance({
-  maxFileSize: 10 * 1024 * 1024, // 10MB for documents
+  maxFileSize: 10 * 1024 * 1024,
   allowedMimeTypes: ['image/jpeg', 'image/png', 'application/pdf'],
   maxFiles: 5,
   fieldName: 'documents',
@@ -14,39 +12,55 @@ export const kycUploadMiddleware = createMulterInstance({
 
 const kycService = new KYCService();
 
+// Upload KYC document
 export async function uploadKYCDocument(req: Request, res: Response): Promise<void> {
   const { userId } = req.params;
-  const { document_type } = req.body;
+  const { document_type, id_number, submitted_as_role } = req.body; // NEW: id_number, submitted_as_role
 
   console.log('[KYCController] uploadKYCDocument called:', {
     userId,
     document_type,
+    submitted_as_role,
     fileCount: req.files ? (req.files as Express.Multer.File[]).length : 0,
   });
 
   try {
+    // NEW: Validate id_number
+    if (!id_number || id_number.trim() === '') {
+      res.status(400).json({ error: 'ID number is required' });
+      return;
+    }
+
+    // NEW: Validate submitted_as_role
+    if (!submitted_as_role || !['buyer', 'seller'].includes(submitted_as_role)) {
+      res.status(400).json({ error: 'submitted_as_role must be buyer or seller' });
+      return;
+    }
+
     if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
-      throw new Error('No files uploaded');
+      res.status(400).json({ error: 'No files uploaded' });
+      return;
     }
 
     const file = req.files[0];
     console.log('[KYCController] Processing file:', {
       originalname: file.originalname,
       size: file.size,
-      mimetype: file.mimetype
+      mimetype: file.mimetype,
     });
 
+    // Pass id_number and submitted_as_role to service (NEW)
     const uploadUrlResponse = await kycService.generateUploadUrl(
       userId,
       document_type,
       file.originalname,
       file.size,
-      file.mimetype
+      file.mimetype,
+      id_number,           // NEW
+      submitted_as_role    // NEW
     );
 
     const { uploadUrl, fileKey } = uploadUrlResponse;
-
-    console.log('[KYCController] Generated upload URL:', { fileKey });
 
     const uploadResponse = await fetch(uploadUrl, {
       method: 'PUT',
@@ -60,10 +74,7 @@ export async function uploadKYCDocument(req: Request, res: Response): Promise<vo
       throw new Error(`Failed to upload file to storage: ${errorText}`);
     }
 
-    console.log('[KYCController] File uploaded to storage successfully');
-
     const document = await kycService.confirmDocumentUpload(userId, fileKey);
-    console.log('[KYCController] Document confirmed:', document);
 
     res.status(200).json({
       message: 'Document uploaded successfully',
@@ -74,26 +85,27 @@ export async function uploadKYCDocument(req: Request, res: Response): Promise<vo
       error: (error as Error).message,
       stack: (error as Error).stack,
       userId,
-      document_type
+      document_type,
     });
     res.status(400).json({ error: (error as Error).message });
   }
 }
 
-// Generate upload URL for KYC document
+// Generate upload URL
 export async function generateKYCUploadUrl(req: Request, res: Response): Promise<void> {
   const { userId } = req.params;
-  const { documentType, fileName, fileSize, mimeType } = req.body;
-  
+  const { documentType, fileName, fileSize, mimeType, idNumber, submittedAsRole } = req.body; // NEW params
+
   try {
     const result = await kycService.generateUploadUrl(
-      userId, 
-      documentType, 
-      fileName, 
-      fileSize, 
-      mimeType
+      userId,
+      documentType,
+      fileName,
+      fileSize,
+      mimeType,
+      idNumber,        // NEW
+      submittedAsRole  // NEW
     );
-    
     res.status(200).json(result);
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
@@ -104,13 +116,10 @@ export async function generateKYCUploadUrl(req: Request, res: Response): Promise
 export async function confirmKYCDocumentUpload(req: Request, res: Response): Promise<void> {
   const { userId } = req.params;
   const { fileKey } = req.body;
-  
+
   try {
     const document = await kycService.confirmDocumentUpload(userId, fileKey);
-    res.status(200).json({ 
-      message: 'Document uploaded successfully', 
-      document 
-    });
+    res.status(200).json({ message: 'Document uploaded successfully', document });
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
   }
@@ -119,11 +128,9 @@ export async function confirmKYCDocumentUpload(req: Request, res: Response): Pro
 // Get user's KYC documents
 export async function getUserKYCDocuments(req: Request, res: Response): Promise<void> {
   const { userId } = req.params;
-  
+
   try {
     const documents = await kycService.getUserKYCDocuments(userId);
-    console.log('[KYCController] Fetched KYC documents for user:', userId, documents.length, 'documents found');
-    console.log('[KYCController] Documents:', documents);
     res.status(200).json({ documents });
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
@@ -133,8 +140,8 @@ export async function getUserKYCDocuments(req: Request, res: Response): Promise<
 // Generate document view URL
 export async function generateDocumentViewUrl(req: Request, res: Response): Promise<void> {
   const { userId, documentId } = req.params;
-  const { role } = req.body; // 'user' or 'admin'
-  
+  const { role } = req.body;
+
   try {
     const result = await kycService.generateDocumentViewUrl(userId, documentId, role);
     res.status(200).json(result);
@@ -143,44 +150,28 @@ export async function generateDocumentViewUrl(req: Request, res: Response): Prom
   }
 }
 
-// Submit KYC for verification - UPDATED with notification
+// Submit KYC for verification
 export async function submitKYCVerification(req: Request, res: Response): Promise<void> {
   const { userId } = req.params;
   const { documentIds } = req.body;
- 
+
   try {
     const verification = await kycService.submitKYCVerification(userId, documentIds);
-    console.log('[KYCController] KYC verification submitted:', verification);
 
-    // Send notification to admins about new KYC submission
     try {
-      console.log('[KYCController] Sending admin notification for KYC submission');
-      
-      // Get user details for the notification placeholders
-      const userDetails = await kycService.getUserProfile(userId); // Assume this method exists in KYCService
-      
+      const userDetails = await kycService.getUserProfile(userId);
       await sendNotification({
-        userId: userId, // This will trigger the admin notifications via the notification service
-        eventType: 'new_user_registered', // This will notify admins
-        placeholders: {
-          full_name: userDetails?.full_name || 'Unknown User'
-        }
+        userId,
+        eventType: 'new_user_registered',
+        placeholders: { full_name: userDetails?.full_name || 'Unknown User' },
       });
-      
-      console.log('[KYCController] Admin notification sent successfully');
     } catch (notificationError) {
       console.error('[KYCController] Failed to send admin notification:', notificationError);
-      // Don't fail the main operation if notification fails
     }
 
-    res.status(200).json({ 
-      message: 'KYC submitted for verification', 
-      verification 
-    });
+    res.status(200).json({ message: 'KYC submitted for verification', verification });
   } catch (error) {
-    console.error('[KYCController] Error in submitKYCVerification:', {
-      error: (error as Error).message,
-    });
+    console.error('[KYCController] Error in submitKYCVerification:', { error: (error as Error).message });
     res.status(400).json({ error: (error as Error).message });
   }
 }
@@ -188,7 +179,7 @@ export async function submitKYCVerification(req: Request, res: Response): Promis
 // Get KYC status
 export async function getKYCStatus(req: Request, res: Response): Promise<void> {
   const { userId } = req.params;
-  
+
   try {
     const status = await kycService.getKYCStatus(userId);
     res.status(200).json(status);
@@ -200,7 +191,7 @@ export async function getKYCStatus(req: Request, res: Response): Promise<void> {
 // Delete KYC document
 export async function deleteKYCDocument(req: Request, res: Response): Promise<void> {
   const { userId, documentId } = req.params;
-  
+
   try {
     await kycService.deleteDocument(userId, documentId);
     res.status(200).json({ message: 'Document deleted successfully' });
@@ -212,82 +203,88 @@ export async function deleteKYCDocument(req: Request, res: Response): Promise<vo
 // Admin: Get pending KYC verifications
 export async function getPendingKYCVerifications(req: Request, res: Response): Promise<void> {
   const { limit = 50, offset = 0 } = req.query;
-  
+
   try {
     const verifications = await kycService.getPendingKYCVerifications(
-      parseInt(limit as string), 
+      parseInt(limit as string),
       parseInt(offset as string)
     );
-    res.status(200).json({ verifications });
+    res.status(200).json({ pendingVerifications: verifications });
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
   }
 }
 
-// Admin: Review KYC verification - UPDATED with notifications
+// Admin: Review KYC verification
 export async function reviewKYCVerification(req: Request, res: Response): Promise<void> {
   const { verificationId } = req.params;
   const { adminId, decision, notes, documentReviews } = req.body;
-  
+
   try {
     const verification = await kycService.reviewKYCVerification(
-      verificationId, 
-      adminId, 
-      decision, 
+      verificationId,
+      adminId,
+      decision,
       notes,
       documentReviews
     );
 
-    console.log('[KYCController] KYC verification reviewed:', verification);
-
-    // Send notifications based on the decision
     try {
-      const userId = verification.userId; // Use correct property name from KYCVerification type
-      
+      const userId = verification.userId;
+
       if (decision === 'approved') {
-        console.log('[KYCController] Sending KYC approved notifications');
-        
-        // Send notification to the user about KYC approval
-        await sendNotification({
-          userId: userId,
-          eventType: 'kyc_approved',
-          placeholders: {
-            // Add any additional placeholders if needed
-          }
-        });
-
-        // The notification service will automatically handle admin notifications
-        // for kyc_approved event based on the notificationTemplates
-        console.log('[KYCController] KYC approved notifications sent successfully');
-        
+        await sendNotification({ userId, eventType: 'kyc_approved', placeholders: {} });
       } else if (decision === 'rejected') {
-        console.log('[KYCController] Sending KYC rejected notifications');
-        
-        // Send notification to the user about KYC rejection
         await sendNotification({
-          userId: userId,
+          userId,
           eventType: 'kyc_rejected',
-          placeholders: {
-            rejection_reason: notes || 'Please check your documents and resubmit'
-          }
+          placeholders: { rejection_reason: notes || 'Please check your documents and resubmit' },
         });
-
-        // The notification service will automatically handle admin notifications
-        // for kyc_rejected event based on the notificationTemplates
-        console.log('[KYCController] KYC rejected notifications sent successfully');
       }
-
     } catch (notificationError) {
       console.error('[KYCController] Failed to send KYC review notifications:', notificationError);
-      // Don't fail the main operation if notification fails
     }
 
-    res.status(200).json({ 
-      message: 'KYC verification reviewed', 
-      verification 
-    });
+    res.status(200).json({ message: 'KYC verification reviewed', verification });
   } catch (error) {
     console.error('[KYCController] Error in reviewKYCVerification:', error);
+    res.status(400).json({ error: (error as Error).message });
+  }
+}
+
+// NEW: Admin — Block a buyer
+export async function blockBuyer(req: Request, res: Response): Promise<void> {
+  const { userId } = req.params;
+  const { adminId, reason } = req.body;
+
+  if (!reason || reason.trim() === '') {
+    res.status(400).json({ error: 'Block reason is required' });
+    return;
+  }
+
+  if (!adminId) {
+    res.status(400).json({ error: 'adminId is required' });
+    return;
+  }
+
+  try {
+    await kycService.blockUser(userId, adminId, reason);
+    res.status(200).json({ message: 'Buyer blocked successfully' });
+  } catch (error) {
+    console.error('[KYCController] Error in blockBuyer:', error);
+    res.status(400).json({ error: (error as Error).message });
+  }
+}
+
+// NEW: Admin — Unblock a buyer
+export async function unblockBuyer(req: Request, res: Response): Promise<void> {
+  const { userId } = req.params;
+
+  try {
+    await kycService.unblockUser(userId);
+    res.status(200).json({ message: 'Buyer unblocked successfully' });
+  } catch (error) {
+    console.error('[KYCController] Error in unblockBuyer:', error);
     res.status(400).json({ error: (error as Error).message });
   }
 }
