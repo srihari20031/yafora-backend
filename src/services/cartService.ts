@@ -5,15 +5,19 @@ interface CartItemUpdate {
   rentalEndDate?: string;
   tryOnRequested?: boolean;
   selectedSize?: string;
+  needsAlteration?: boolean;
+  alterationNotes?: string | null;
 }
 
 export async function addToCart(
   buyerId: string,
   productId: string,
-  rentalStartDate?: string | null, // Made optional
-  rentalEndDate?: string | null,   // Made optional
+  rentalStartDate?: string | null,
+  rentalEndDate?: string | null,
   tryOnRequested: boolean = false,
-  selectedSize?: string | null
+  selectedSize?: string | null,
+  needsAlteration: boolean = false,
+  alterationNotes?: string | null
 ) {
   let rentalDurationDays: number | null = null;
   
@@ -76,7 +80,9 @@ export async function addToCart(
         try_on_requested: tryOnRequested,
         selected_size: selectedSize,
         dates_selected: !!(rentalStartDate && rentalEndDate),
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        needs_alteration: needsAlteration,
+        alteration_notes: alterationNotes ?? null
       })
       .eq('id', existingItem.id)
       .select(`
@@ -86,7 +92,8 @@ export async function addToCart(
           title,
           rental_price_per_day,
           security_deposit_percentage,
-          images
+          images,
+          is_alteration_available
         )
       `)
       .single();
@@ -106,6 +113,8 @@ export async function addToCart(
     selected_size: selectedSize,
     expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
     dates_selected: !!(rentalStartDate && rentalEndDate), // Track if dates are selected
+    needs_alteration: needsAlteration,
+    alteration_notes: alterationNotes ?? null
   };
 
   // Add dates only if provided
@@ -126,7 +135,8 @@ export async function addToCart(
         title,
         rental_price_per_day,
         security_deposit_percentage,
-        images
+        images,
+        is_alteration_available
       )
     `)
     .single();
@@ -165,6 +175,7 @@ export async function getUserCart(buyerId: string) {
         overall_size,
         available_sizes,
         availability_status,
+        is_alteration_available,
         profiles!products_seller_id_fkey (
           full_name,
           pickup_address
@@ -305,6 +316,11 @@ export async function updateCartItem(
     updateData.selected_size = updates.selectedSize;
   }
 
+  if (updates.needsAlteration !== undefined) {
+    updateData.needs_alteration = updates.needsAlteration;
+    updateData.alteration_notes = updates.alterationNotes ?? null;
+  }
+
   updateData.updated_at = new Date().toISOString();
   
   const { data, error } = await supabaseDB
@@ -319,7 +335,8 @@ export async function updateCartItem(
         title,
         rental_price_per_day,
         security_deposit_percentage,
-        images
+        images,
+        is_alteration_available
       )
     `)
     .single();

@@ -86,7 +86,7 @@ export async function globalSearch(
 
   // Apply filters
   const appliedFilters: string[] = [];
-  
+
   if (filters.category) {
     dbQuery = dbQuery.eq('category', filters.category);
     appliedFilters.push(`category=${filters.category}`);
@@ -203,7 +203,7 @@ export async function globalSearch(
     const avgRating = reviews.length > 0
       ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length
       : 0;
-    
+
     return {
       ...product,
       average_rating: avgRating,
@@ -265,51 +265,24 @@ export async function globalSearch(
       allProductsQuery = allProductsQuery.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%,subcategory.ilike.%${searchTerm}%,color.ilike.%${searchTerm}%,secondary_color.ilike.%${searchTerm}%,material.ilike.%${searchTerm}%,condition.ilike.%${searchTerm}%`);
     }
 
-    // Apply filters
-    if (filters.category) {
-      allProductsQuery = allProductsQuery.eq('category', filters.category);
-    }
-    if (filters.minPrice !== undefined) {
-      allProductsQuery = allProductsQuery.gte('rental_price_per_day', filters.minPrice);
-    }
-    if (filters.maxPrice !== undefined) {
-      allProductsQuery = allProductsQuery.lte('rental_price_per_day', filters.maxPrice);
-    }
+    if (filters.category) allProductsQuery = allProductsQuery.eq('category', filters.category);
+    if (filters.minPrice !== undefined) allProductsQuery = allProductsQuery.gte('rental_price_per_day', filters.minPrice);
+    if (filters.maxPrice !== undefined) allProductsQuery = allProductsQuery.lte('rental_price_per_day', filters.maxPrice);
     if (filters.availability) {
       allProductsQuery = allProductsQuery.eq('availability_status', filters.availability);
     } else {
       allProductsQuery = allProductsQuery.eq('availability_status', 'available');
     }
-    if (filters.tryOnAvailable !== undefined) {
-      allProductsQuery = allProductsQuery.eq('try_on_available', filters.tryOnAvailable);
-    }
-    if (filters.sellerId) {
-      allProductsQuery = allProductsQuery.eq('seller_id', filters.sellerId);
-    }
-    if (filters.size) {
-      allProductsQuery = allProductsQuery.eq('size', filters.size);
-    }
-    if (filters.subcategory) {
-      allProductsQuery = allProductsQuery.eq('subcategory', filters.subcategory);
-    }
-    if (filters.featured) {
-      allProductsQuery = allProductsQuery.eq('is_featured', true);
-    }
-    if (filters.color) {
-      allProductsQuery = allProductsQuery.eq('color', filters.color);
-    }
-    if (filters.material) {
-      allProductsQuery = allProductsQuery.eq('material', filters.material);
-    }
-    if (filters.tags && filters.tags.length > 0) {
-      allProductsQuery = allProductsQuery.contains('tags', filters.tags);
-    }
-    if (filters.occasion_tags && filters.occasion_tags.length > 0) {
-      allProductsQuery = allProductsQuery.contains('occasion_tags', filters.occasion_tags);
-    }
-    if (filters.condition) {
-      allProductsQuery = allProductsQuery.eq('condition', filters.condition);
-    }
+    if (filters.tryOnAvailable !== undefined) allProductsQuery = allProductsQuery.eq('try_on_available', filters.tryOnAvailable);
+    if (filters.sellerId) allProductsQuery = allProductsQuery.eq('seller_id', filters.sellerId);
+    if (filters.size) allProductsQuery = allProductsQuery.eq('size', filters.size);
+    if (filters.subcategory) allProductsQuery = allProductsQuery.eq('subcategory', filters.subcategory);
+    if (filters.featured) allProductsQuery = allProductsQuery.eq('is_featured', true);
+    if (filters.color) allProductsQuery = allProductsQuery.eq('color', filters.color);
+    if (filters.material) allProductsQuery = allProductsQuery.eq('material', filters.material);
+    if (filters.tags && filters.tags.length > 0) allProductsQuery = allProductsQuery.contains('tags', filters.tags);
+    if (filters.occasion_tags && filters.occasion_tags.length > 0) allProductsQuery = allProductsQuery.contains('occasion_tags', filters.occasion_tags);
+    if (filters.condition) allProductsQuery = allProductsQuery.eq('condition', filters.condition);
     allProductsQuery = allProductsQuery.eq('available', true);
 
     const { data: allProductsData, error: allProductsError } = await allProductsQuery;
@@ -348,23 +321,20 @@ export async function globalSearch(
     const categories = Object.entries(subcategoryGroups)
       .sort(([, a], [, b]) => b.length - a.length)
       .map(([subcategory, products]) => {
-        // Sort products by featured status and rating
         const sortedProducts = products.sort((a: any, b: any) => {
-          if (a.is_featured !== b.is_featured) {
-            return b.is_featured ? 1 : -1;
-          }
+          if (a.is_featured !== b.is_featured) return b.is_featured ? 1 : -1;
           return b.average_rating - a.average_rating;
         });
 
         return {
           subcategory,
           count: products.length,
-          products: sortedProducts.slice(0, 5) // Top 3-5 products
+          products: sortedProducts.slice(0, 5)
         };
       });
 
     result.categories = categories;
-    result.allProducts = productsWithRatings; // Paginated products for "View All"
+    result.allProducts = productsWithRatings;
 
     const categoryGroupingDuration = Date.now() - categoryGroupingStartTime;
     console.log('🔍 [SERVICE] Category grouping completed:', {
@@ -394,7 +364,6 @@ export async function getSearchSuggestions(
 ) {
   console.log('💡 [SERVICE] getSearchSuggestions called:', { query, currentFilters });
 
-  // Get matching categories
   const categories = ['women_wear', 'men_wear', 'kids_wear', 'jewelry', 'swami_sets', 'special_occasion', 'other'];
   const matchingCategories = query
     ? categories.filter(cat =>
@@ -403,19 +372,25 @@ export async function getSearchSuggestions(
       )
     : categories;
 
-  console.log('💡 [SERVICE] Matching categories:', matchingCategories);
-
   // Get matching subcategories from database
   let subcategories: string[] = [];
   if (query && query.trim() !== '') {
     const searchTerm = query.trim().toLowerCase();
-    const { data, error } = await supabaseDB
+
+    let subcatQuery = supabaseDB
       .from('products')
       .select('subcategory')
       .or(`subcategory.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`)
       .eq('available', true)
       .eq('is_visible', true)
       .not('subcategory', 'is', null);
+
+    // Scope to selected category if provided
+    if (currentFilters.category) {
+      subcatQuery = subcatQuery.eq('category', currentFilters.category);
+    }
+
+    const { data, error } = await subcatQuery;
 
     if (!error && data) {
       const uniqueSubcategories = [...new Set(data.map(p => p.subcategory).filter(Boolean))];
@@ -426,9 +401,6 @@ export async function getSearchSuggestions(
     }
   }
 
-  console.log('💡 [SERVICE] Matching subcategories:', subcategories);
-
-  // Define price ranges for suggestions
   const priceRanges = [
     { label: 'Under ₹500', min: 0, max: 500 },
     { label: '₹500 - ₹1000', min: 500, max: 1000 },
@@ -437,18 +409,18 @@ export async function getSearchSuggestions(
     { label: 'Above ₹5000', min: 5000, max: 999999 }
   ];
 
-  return {
-    categories: matchingCategories,
-    subcategories,
-    priceRanges
-  };
+  return { categories: matchingCategories, subcategories, priceRanges };
 }
 
-// Get autocomplete suggestions
-export async function getAutocompleteSuggestions(query: string, limit: number = 10) {
+// Get autocomplete suggestions — now supports optional category scoping
+export async function getAutocompleteSuggestions(
+  query: string,
+  limit: number = 10,
+  category?: string  // ← NEW: optional category filter
+) {
   const startTime = Date.now();
 
-  console.log('💡 [SERVICE] getAutocompleteSuggestions called:', { query, limit });
+  console.log('💡 [SERVICE] getAutocompleteSuggestions called:', { query, limit, category });
 
   if (!query || query.trim() === '') {
     console.log('⚠️ [SERVICE] Empty query in autocomplete, returning empty array');
@@ -456,10 +428,8 @@ export async function getAutocompleteSuggestions(query: string, limit: number = 
   }
 
   const searchTerm = query.trim().toLowerCase();
-  console.log('💡 [SERVICE] Searching autocomplete with term:', searchTerm);
 
-  const queryStartTime = Date.now();
-  const { data, error } = await supabaseDB
+  let dbQuery = supabaseDB
     .from('products')
     .select('id, title, category, subcategory, images, rental_price_per_day')
     .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%,subcategory.ilike.%${searchTerm}%,color.ilike.%${searchTerm}%,secondary_color.ilike.%${searchTerm}%,material.ilike.%${searchTerm}%,condition.ilike.%${searchTerm}%`)
@@ -469,20 +439,25 @@ export async function getAutocompleteSuggestions(query: string, limit: number = 
     .order('is_featured', { ascending: false })
     .limit(limit);
 
+  // Scope to category if provided and not "all"
+  if (category && category !== 'all') {
+    dbQuery = dbQuery.eq('category', category);
+    console.log('💡 [SERVICE] Scoping autocomplete to category:', category);
+  }
+
+  const queryStartTime = Date.now();
+  const { data, error } = await dbQuery;
   const queryDuration = Date.now() - queryStartTime;
 
   console.log('💡 [SERVICE] Autocomplete query executed:', {
     duration: `${queryDuration}ms`,
     resultsCount: data?.length || 0,
-    hasError: !!error
+    hasError: !!error,
+    category: category || 'all'
   });
 
   if (error) {
-    console.error('❌ [SERVICE] Autocomplete query error:', {
-      message: error.message,
-      details: error,
-      query
-    });
+    console.error('❌ [SERVICE] Autocomplete query error:', { message: error.message, query });
     throw new Error(`Failed to fetch autocomplete suggestions: ${error.message}`);
   }
 
@@ -490,15 +465,15 @@ export async function getAutocompleteSuggestions(query: string, limit: number = 
     id: product.id,
     title: product.title,
     category: product.category,
-    subcategory: product.subcategory,
+    subcategory: product.subcategory || null,
     image: product.images?.[0] || null,
     price: product.rental_price_per_day
   })) || [];
 
-  const totalDuration = Date.now() - startTime;
   console.log('✅ [SERVICE] Autocomplete completed:', {
-    totalDuration: `${totalDuration}ms`,
-    suggestionsReturned: suggestions.length
+    totalDuration: `${Date.now() - startTime}ms`,
+    suggestionsReturned: suggestions.length,
+    category: category || 'all'
   });
 
   return suggestions;
@@ -507,12 +482,9 @@ export async function getAutocompleteSuggestions(query: string, limit: number = 
 // Get popular searches
 export async function getPopularSearches(limit: number = 10) {
   const startTime = Date.now();
-  
+
   console.log('🔥 [SERVICE] getPopularSearches called:', { limit });
-  
-  // This would ideally track search queries in a separate table
-  // For now, return popular categories and featured products
-  
+
   const { data, error } = await supabaseDB
     .from('products')
     .select('title, category, id')
@@ -529,10 +501,7 @@ export async function getPopularSearches(limit: number = 10) {
   });
 
   if (error) {
-    console.error('❌ [SERVICE] Popular searches query error:', {
-      message: error.message,
-      details: error
-    });
+    console.error('❌ [SERVICE] Popular searches query error:', { message: error.message });
     throw new Error(`Failed to fetch popular searches: ${error.message}`);
   }
 
@@ -565,7 +534,7 @@ export async function searchByCategory(
   });
 
   const result = await globalSearch('', page, limit, { ...filters, category });
-  
+
   console.log('✅ [SERVICE] searchByCategory completed:', {
     category,
     resultsCount: result.products.length,
@@ -578,10 +547,9 @@ export async function searchByCategory(
 // Get search filters metadata
 export async function getSearchFiltersMetadata() {
   const startTime = Date.now();
-  
+
   console.log('⚙️ [SERVICE] getSearchFiltersMetadata called');
 
-  // Get available categories
   const categories = [
     { value: 'women_wear', label: 'Women Wear' },
     { value: 'men_wear', label: 'Men Wear' },
@@ -592,9 +560,6 @@ export async function getSearchFiltersMetadata() {
     { value: 'other', label: 'Other' }
   ];
 
-  console.log('⚙️ [SERVICE] Fetching price range...');
-
-  // Get price range from existing products
   const priceQueryStart = Date.now();
   const { data: priceData, error: priceError } = await supabaseDB
     .from('products')
@@ -611,10 +576,7 @@ export async function getSearchFiltersMetadata() {
   });
 
   if (priceError) {
-    console.error('❌ [SERVICE] Price range query error:', {
-      message: priceError.message,
-      details: priceError
-    });
+    console.error('❌ [SERVICE] Price range query error:', { message: priceError.message });
     throw new Error(`Failed to fetch price range: ${priceError.message}`);
   }
 
@@ -622,11 +584,6 @@ export async function getSearchFiltersMetadata() {
   const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
   const maxPrice = prices.length > 0 ? Math.max(...prices) : 10000;
 
-  console.log('⚙️ [SERVICE] Price range calculated:', { minPrice, maxPrice, totalProducts: prices.length });
-
-  // Get available sizes
-  console.log('⚙️ [SERVICE] Fetching sizes...');
-  
   const sizesQueryStart = Date.now();
   const { data: sizeData, error: sizeError } = await supabaseDB
     .from('products')
@@ -643,22 +600,15 @@ export async function getSearchFiltersMetadata() {
   });
 
   if (sizeError) {
-    console.error('❌ [SERVICE] Sizes query error:', {
-      message: sizeError.message,
-      details: sizeError
-    });
+    console.error('❌ [SERVICE] Sizes query error:', { message: sizeError.message });
     throw new Error(`Failed to fetch sizes: ${sizeError.message}`);
   }
 
   const uniqueSizes = [...new Set(sizeData?.map(p => p.size).filter(Boolean))];
-  console.log('⚙️ [SERVICE] Unique sizes found:', uniqueSizes);
 
   const metadata = {
     categories,
-    priceRange: {
-      min: minPrice,
-      max: maxPrice
-    },
+    priceRange: { min: minPrice, max: maxPrice },
     sizes: uniqueSizes.map(size => ({ value: size, label: size })),
     availabilityOptions: [
       { value: 'available', label: 'Available' },
@@ -680,14 +630,11 @@ export async function getSearchFiltersMetadata() {
 // Get trending products
 export async function getTrendingProducts(limit: number = 10) {
   const startTime = Date.now();
-  
+
   console.log('📈 [SERVICE] getTrendingProducts called:', { limit });
 
-  // Get products with most orders in the last 30 days
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-  console.log('📈 [SERVICE] Fetching orders from:', thirtyDaysAgo.toISOString());
 
   const ordersQueryStart = Date.now();
   const { data: orderData, error: orderError } = await supabaseDB
@@ -703,51 +650,30 @@ export async function getTrendingProducts(limit: number = 10) {
   });
 
   if (orderError) {
-    console.error('❌ [SERVICE] Orders query error:', {
-      message: orderError.message,
-      details: orderError
-    });
+    console.error('❌ [SERVICE] Orders query error:', { message: orderError.message });
     throw new Error(`Failed to fetch trending products: ${orderError.message}`);
   }
 
-  // Count product occurrences
   const productCounts = orderData?.reduce((acc: any, order: any) => {
     acc[order.product_id] = (acc[order.product_id] || 0) + 1;
     return acc;
   }, {}) || {};
 
-  console.log('📈 [SERVICE] Product order counts calculated:', {
-    uniqueProducts: Object.keys(productCounts).length,
-    topProducts: Object.entries(productCounts)
-      .sort(([, a]: any, [, b]: any) => b - a)
-      .slice(0, 5)
-      .map(([id, count]) => ({ id, count }))
-  });
-
-  // Get top product IDs
   const trendingProductIds = Object.entries(productCounts)
     .sort(([, a]: any, [, b]: any) => b - a)
     .slice(0, limit)
     .map(([id]) => id);
 
-  console.log('📈 [SERVICE] Trending product IDs:', trendingProductIds);
-
   if (trendingProductIds.length === 0) {
     console.log('⚠️ [SERVICE] No trending products found, falling back to featured products');
-    
-    // If no trending products, return featured products
+
     const featuredQueryStart = Date.now();
     const { data: featuredData, error: featuredError } = await supabaseDB
       .from('products')
       .select(`
         *,
-        seller:profiles!products_seller_id_fkey (
-          id,
-          full_name
-        ),
-        reviews:reviews (
-          rating
-        )
+        seller:profiles!products_seller_id_fkey (id, full_name),
+        reviews:reviews (rating)
       `)
       .eq('is_featured', true)
       .eq('available', true)
@@ -762,36 +688,20 @@ export async function getTrendingProducts(limit: number = 10) {
     });
 
     if (featuredError) {
-      console.error('❌ [SERVICE] Featured products query error:', {
-        message: featuredError.message,
-        details: featuredError
-      });
+      console.error('❌ [SERVICE] Featured products query error:', { message: featuredError.message });
       throw new Error(`Failed to fetch featured products: ${featuredError.message}`);
     }
-
-    console.log('✅ [SERVICE] getTrendingProducts completed (featured fallback):', {
-      totalDuration: `${Date.now() - startTime}ms`,
-      productsReturned: featuredData?.length || 0
-    });
 
     return featuredData || [];
   }
 
-  // Get product details
-  console.log('📈 [SERVICE] Fetching product details for trending products...');
-  
   const productsQueryStart = Date.now();
   const { data, error } = await supabaseDB
     .from('products')
     .select(`
       *,
-      seller:profiles!products_seller_id_fkey (
-        id,
-        full_name
-      ),
-      reviews:reviews (
-        rating
-      )
+      seller:profiles!products_seller_id_fkey (id, full_name),
+      reviews:reviews (rating)
     `)
     .in('id', trendingProductIds)
     .eq('available', true)
@@ -805,22 +715,16 @@ export async function getTrendingProducts(limit: number = 10) {
   });
 
   if (error) {
-    console.error('❌ [SERVICE] Product details query error:', {
-      message: error.message,
-      details: error
-    });
+    console.error('❌ [SERVICE] Product details query error:', { message: error.message });
     throw new Error(`Failed to fetch trending products details: ${error.message}`);
   }
 
-  // Calculate average ratings
-  console.log('📈 [SERVICE] Calculating ratings for trending products...');
-  
   const productsWithRatings = data?.map((product: any) => {
     const reviews = product.reviews || [];
     const avgRating = reviews.length > 0
       ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length
       : 0;
-    
+
     return {
       ...product,
       average_rating: avgRating,
@@ -830,17 +734,11 @@ export async function getTrendingProducts(limit: number = 10) {
     };
   }) || [];
 
-  // Sort by order count
   productsWithRatings.sort((a, b) => b.order_count - a.order_count);
 
   console.log('✅ [SERVICE] getTrendingProducts completed:', {
     totalDuration: `${Date.now() - startTime}ms`,
-    productsReturned: productsWithRatings.length,
-    topProduct: productsWithRatings[0] ? {
-      id: productsWithRatings[0].id,
-      title: productsWithRatings[0].title,
-      orderCount: productsWithRatings[0].order_count
-    } : null
+    productsReturned: productsWithRatings.length
   });
 
   return productsWithRatings;

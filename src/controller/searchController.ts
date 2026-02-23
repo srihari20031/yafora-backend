@@ -11,7 +11,7 @@ import {
 // Main global search endpoint
 export async function searchProducts(req: Request, res: Response): Promise<void> {
   const startTime = Date.now();
-  
+
   const {
     q: query = '',
     page = 1,
@@ -71,7 +71,7 @@ export async function searchProducts(req: Request, res: Response): Promise<void>
     );
 
     const duration = Date.now() - startTime;
-    
+
     console.log('✅ [SEARCH] Search completed successfully:', {
       query,
       resultsCount: result.products?.length || 0,
@@ -88,32 +88,37 @@ export async function searchProducts(req: Request, res: Response): Promise<void>
     });
   } catch (err) {
     const duration = Date.now() - startTime;
-    
+
     console.error('❌ [SEARCH] Search failed:', {
       query,
       error: (err as Error).message,
       stack: (err as Error).stack,
       duration: `${duration}ms`
     });
-    
-    res.status(400).json({ 
+
+    res.status(400).json({
       success: false,
-      error: (err as Error).message 
+      error: (err as Error).message
     });
   }
 }
 
 // Autocomplete suggestions endpoint
+// Supports optional ?category=<value> to scope results to a specific category
 export async function getAutocomplete(req: Request, res: Response): Promise<void> {
   const startTime = Date.now();
-  const { q: query = '', limit = 10 } = req.query;
+  const {
+    q: query = '',
+    limit = 10,
+    category // ← NEW: optional category scope
+  } = req.query;
 
-  console.log('💡 [AUTOCOMPLETE] Request received:', { query, limit });
+  console.log('💡 [AUTOCOMPLETE] Request received:', { query, limit, category });
 
   try {
     if (!query || (query as string).trim() === '') {
       console.log('⚠️ [AUTOCOMPLETE] Empty query provided');
-      
+
       res.status(200).json({
         success: true,
         message: 'No query provided',
@@ -124,16 +129,18 @@ export async function getAutocomplete(req: Request, res: Response): Promise<void
 
     const suggestions = await getAutocompleteSuggestions(
       query as string,
-      Number(limit)
+      Number(limit),
+      category as string | undefined  // ← pass category through
     );
 
     const duration = Date.now() - startTime;
-    
+
     console.log('✅ [AUTOCOMPLETE] Suggestions retrieved:', {
       query,
+      category: category || 'all',
       suggestionsCount: suggestions.length,
       duration: `${duration}ms`,
-      suggestions: suggestions.slice(0, 3) // Log first 3 suggestions
+      suggestions: suggestions.slice(0, 3)
     });
 
     res.status(200).json({
@@ -143,16 +150,16 @@ export async function getAutocomplete(req: Request, res: Response): Promise<void
     });
   } catch (err) {
     const duration = Date.now() - startTime;
-    
+
     console.error('❌ [AUTOCOMPLETE] Failed:', {
       query,
       error: (err as Error).message,
       duration: `${duration}ms`
     });
-    
-    res.status(400).json({ 
+
+    res.status(400).json({
       success: false,
-      error: (err as Error).message 
+      error: (err as Error).message
     });
   }
 }
@@ -168,11 +175,11 @@ export async function getPopularSearchesList(req: Request, res: Response): Promi
     const searches = await getPopularSearches(Number(limit));
 
     const duration = Date.now() - startTime;
-    
+
     console.log('✅ [POPULAR] Popular searches retrieved:', {
       count: searches.length,
       duration: `${duration}ms`,
-      searches: searches.slice(0, 5) // Log first 5
+      searches: searches.slice(0, 5)
     });
 
     res.status(200).json({
@@ -182,15 +189,15 @@ export async function getPopularSearchesList(req: Request, res: Response): Promi
     });
   } catch (err) {
     const duration = Date.now() - startTime;
-    
+
     console.error('❌ [POPULAR] Failed:', {
       error: (err as Error).message,
       duration: `${duration}ms`
     });
-    
-    res.status(400).json({ 
+
+    res.status(400).json({
       success: false,
-      error: (err as Error).message 
+      error: (err as Error).message
     });
   }
 }
@@ -199,7 +206,7 @@ export async function getPopularSearchesList(req: Request, res: Response): Promi
 export async function searchProductsByCategory(req: Request, res: Response): Promise<void> {
   const startTime = Date.now();
   const { category } = req.params;
-  const { 
+  const {
     page = 1,
     limit = 20,
     subcategory,
@@ -249,7 +256,7 @@ export async function searchProductsByCategory(req: Request, res: Response): Pro
     );
 
     const duration = Date.now() - startTime;
-    
+
     console.log('✅ [CATEGORY_SEARCH] Search completed:', {
       category,
       resultsCount: result.products?.length || 0,
@@ -266,17 +273,17 @@ export async function searchProductsByCategory(req: Request, res: Response): Pro
     });
   } catch (err) {
     const duration = Date.now() - startTime;
-    
+
     console.error('❌ [CATEGORY_SEARCH] Failed:', {
       category,
       error: (err as Error).message,
       stack: (err as Error).stack,
       duration: `${duration}ms`
     });
-    
-    res.status(400).json({ 
+
+    res.status(400).json({
       success: false,
-      error: (err as Error).message 
+      error: (err as Error).message
     });
   }
 }
@@ -284,14 +291,14 @@ export async function searchProductsByCategory(req: Request, res: Response): Pro
 // Get filter metadata endpoint
 export async function getFiltersMetadataController(req: Request, res: Response): Promise<void> {
   const startTime = Date.now();
-  
+
   console.log('⚙️ [FILTERS_METADATA] Fetching filter metadata');
 
   try {
     const metadata = await getSearchFiltersMetadata();
 
     const duration = Date.now() - startTime;
-    
+
     console.log('✅ [FILTERS_METADATA] Metadata retrieved:', {
       duration: `${duration}ms`,
       categories: Object.keys(metadata).length
@@ -304,15 +311,15 @@ export async function getFiltersMetadataController(req: Request, res: Response):
     });
   } catch (err) {
     const duration = Date.now() - startTime;
-    
+
     console.error('❌ [FILTERS_METADATA] Failed:', {
       error: (err as Error).message,
       duration: `${duration}ms`
     });
-    
-    res.status(400).json({ 
+
+    res.status(400).json({
       success: false,
-      error: (err as Error).message 
+      error: (err as Error).message
     });
   }
 }
@@ -328,11 +335,11 @@ export async function getTrendingProductsList(req: Request, res: Response): Prom
     const products = await getTrendingProducts(Number(limit));
 
     const duration = Date.now() - startTime;
-    
+
     console.log('✅ [TRENDING] Trending products retrieved:', {
       count: products.length,
       duration: `${duration}ms`,
-      productIds: products.slice(0, 5).map(p => p.id || p._id) // Log first 5 IDs
+      productIds: products.slice(0, 5).map((p: any) => p.id || p._id)
     });
 
     res.status(200).json({
@@ -342,15 +349,15 @@ export async function getTrendingProductsList(req: Request, res: Response): Prom
     });
   } catch (err) {
     const duration = Date.now() - startTime;
-    
+
     console.error('❌ [TRENDING] Failed:', {
       error: (err as Error).message,
       duration: `${duration}ms`
     });
-    
-    res.status(400).json({ 
+
+    res.status(400).json({
       success: false,
-      error: (err as Error).message 
+      error: (err as Error).message
     });
   }
 }
