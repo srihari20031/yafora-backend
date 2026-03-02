@@ -122,7 +122,10 @@ export async function globalSearch(
   }
 
   if (filters.size) {
-    dbQuery = dbQuery.eq('size', filters.size);
+    // Search in both overall_size (ilike for partial/comma-separated matches) 
+    // and available_sizes (contains for array membership)
+    const sizeLower = filters.size.toLowerCase();
+    dbQuery = dbQuery.or(`overall_size.ilike.%${filters.size}%,available_sizes.cs.{"${filters.size}"},available_sizes.cs.{"${sizeLower}"},available_sizes.cs.{"${filters.size.toUpperCase()}"}`);
     appliedFilters.push(`size=${filters.size}`);
   }
 
@@ -275,7 +278,12 @@ export async function globalSearch(
     }
     if (filters.tryOnAvailable !== undefined) allProductsQuery = allProductsQuery.eq('try_on_available', filters.tryOnAvailable);
     if (filters.sellerId) allProductsQuery = allProductsQuery.eq('seller_id', filters.sellerId);
-    if (filters.size) allProductsQuery = allProductsQuery.eq('size', filters.size);
+    if (filters.size) {
+      // Search in both overall_size (ilike for partial/comma-separated matches) 
+      // and available_sizes (contains for array membership)
+      const sizeLower = filters.size.toLowerCase();
+      allProductsQuery = allProductsQuery.or(`overall_size.ilike.%${filters.size}%,available_sizes.cs.{"${filters.size}"},available_sizes.cs.{"${sizeLower}"},available_sizes.cs.{"${filters.size.toUpperCase()}"}`);
+    }
     if (filters.subcategory) allProductsQuery = allProductsQuery.eq('subcategory', filters.subcategory);
     if (filters.featured) allProductsQuery = allProductsQuery.eq('is_featured', true);
     if (filters.color) allProductsQuery = allProductsQuery.eq('color', filters.color);

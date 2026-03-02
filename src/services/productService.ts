@@ -525,7 +525,13 @@ export async function searchProducts(
   }
 
   if (filters.size) {
-    query = query.eq('size', filters.size);
+    // Search in both overall_size (ilike for partial/comma-separated matches) 
+    // and available_sizes (contains for array membership)
+    // Case insensitive by converting to lowercase
+    const sizeLower = filters.size.toLowerCase();
+    
+    // Use OR to check both columns - overall_size uses ilike, available_sizes uses contains
+    query = query.or(`overall_size.ilike.%${filters.size}%,available_sizes.cs.{"${filters.size}"},available_sizes.cs.{"${sizeLower}"},available_sizes.cs.{"${filters.size.toUpperCase()}"}`);
   }
 
   if (filters.availability) {

@@ -176,6 +176,8 @@ export async function getUserCart(buyerId: string) {
         available_sizes,
         availability_status,
         is_alteration_available,
+        min_rental_days,
+        max_rental_days,
         profiles!products_seller_id_fkey (
           full_name,
           pickup_address
