@@ -91,6 +91,8 @@ export interface ProductFilters {
   tags?: string[];
   occasion_tags?: string[];
   condition?: string;
+  multiPieceOnly?: boolean;
+  buyerId?: string;
 }
 
 /**
@@ -489,20 +491,44 @@ export async function searchProducts(
   limit: number = 10
 ) {
   const offset = (page - 1) * limit;
+  const { buyerId } = filters;
+
+  // If buyerId provided, left join favorites to get wishlist status in one shot
+  const selectQuery = buyerId
+    ? `
+        *,
+        is_multi_piece,
+        piece_details,
+        target_gender,
+        profiles!products_seller_id_fkey (
+          full_name,
+          pickup_address
+        ),
+        favorites!left (
+          id,
+          buyer_id
+        )
+      `
+    : `
+        *,
+        is_multi_piece,
+        piece_details,
+        target_gender,
+        profiles!products_seller_id_fkey (
+          full_name,
+          pickup_address
+        )
+      `;
 
   let query = supabaseDB
     .from('products')
-    .select(`
-      *,
-      is_multi_piece,
-      piece_details,
-      target_gender,
-      profiles!products_seller_id_fkey (
-        full_name,
-        pickup_address
-      )
-    `, { count: 'exact' })
+    .select(selectQuery, { count: 'exact' })
     .eq('is_visible', true);
+
+  // Filter the left join to only this buyer's favorites
+  if (buyerId) {
+    query = query.eq('favorites.buyer_id', buyerId);
+  }
 
   if (searchQuery) {
     query = query.or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
@@ -564,6 +590,10 @@ export async function searchProducts(
     query = query.eq('condition', filters.condition);
   }
 
+  if (filters.multiPieceOnly === true) {
+    query = query.eq('is_multi_piece', true);
+  }
+
   const { data, error, count } = await query
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
@@ -573,7 +603,14 @@ export async function searchProducts(
   }
 
   return {
-    products: (data || []).map(formatProductResponse),
+    products: (data || []).map((product: any) => {
+      const { favorites, ...rest } = product;
+      return {
+        ...formatProductResponse(rest),
+        // favorites array will have 1 item if wishlisted, 0 if not
+        isWishlisted: Array.isArray(favorites) && favorites.length > 0,
+      };
+    }),
     total: count,
     page,
     limit,

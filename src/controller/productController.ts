@@ -304,12 +304,14 @@ export async function searchProductsHandler(req: Request, res: Response): Promis
     tags,
     occasion_tags,
     condition,
+    multiPieceOnly,
+    buyerId,
     page = 1, 
     limit = 10 
   } = req.query;
   console.log('[ProductController] searchProductsHandler called:', {
     searchQuery: q,
-    filters: { category, subcategory, minPrice, maxPrice, size, availability, featured, color, material, tags, occasion_tags, condition },
+    filters: { category, subcategory, minPrice, maxPrice, size, availability, featured, color, material, tags, occasion_tags, condition, multiPieceOnly, buyerId },
     page,
     limit
   });
@@ -327,7 +329,9 @@ export async function searchProductsHandler(req: Request, res: Response): Promis
       material: material as string,
       tags: tags ? JSON.parse(tags as string) : undefined,
       occasion_tags: occasion_tags ? JSON.parse(occasion_tags as string) : undefined,
-      condition: condition as string
+      condition: condition as string,
+      multiPieceOnly: multiPieceOnly === 'true',
+      buyerId: buyerId as string | undefined
     };
     console.log('[ProductController] Parsed filters:', filters);
 
